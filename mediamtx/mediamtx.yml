@@ -1,0 +1,27 @@
+logLevel: info
+logDestinations: [stdout]
+
+rtsp: true
+rtspAddress: :8554
+
+hls: true
+hlsAddress: :8888
+hlsAllowOrigin: '*'
+
+webrtc: true
+webrtcAddress: :8889
+
+api: true
+apiAddress: :9997
+
+rtmp: true
+rtmpAddress: :1935
+
+paths:
+  # Path untuk drone Autel EVO Max 4T
+  drone:
+    source: publisher
+  
+  # Path lain untuk testing
+  live:
+    source: publisher

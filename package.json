@@ -1,0 +1,92 @@
+{
+  "name": "securestream-pro",
+  "version": "2.0.0",
+  "description": "Secure Video Streaming Platform with License Protection",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "pack": "electron-builder --dir",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "build": {
+    "appId": "com.yourcompany.securestream",
+    "productName": "SecureStream Pro",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "**/*",
+      "!node_modules",
+      "!dist",
+      "!build",
+      "!src",
+      "!.gitignore",
+      "!*.md"
+    ],
+    "extraResources": [
+      {
+        "from": "mediamtx/",
+        "to": "mediamtx/",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "assets/",
+        "to": "assets/",
+        "filter": [
+          "**/*"
+        ]
+      },
+      "license-checker.py",
+      "generate-license.py"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "publisherName": "Your Company"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "SecureStream Pro",
+      "uninstallDisplayName": "${productName}",
+      "license": "license.txt"
+    },
+    "publish": null
+  },
+  "keywords": [
+    "video",
+    "streaming",
+    "security",
+    "rtsp",
+    "rtmp",
+    "mediamtx",
+    "license"
+  ],
+  "author": "Your Company",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^29.0.0",
+    "electron-builder": "^24.9.0"
+  },
+  "dependencies": {
+    "hls.js": "^1.6.15",
+    "video.js": "^8.23.4",
+    "videojs-contrib-hls": "^5.15.0"
+  }
+}

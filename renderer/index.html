@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AirSea Drone Narada</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="screen active">
+        <div class="loading-container">
+            <div class="logo-animation">
+                <div class="logo-circle">
+                    <i class="fas fa-shield-alt"></i>
+                </div>
+                <div class="pulse-ring"></div>
+                <div class="pulse-ring delay-1"></div>
+                <div class="pulse-ring delay-2"></div>
+            </div>
+            <h1 class="app-title">SecureStream Pro</h1>
+            <p class="loading-text">Memeriksa lisensi dan memulai layanan...</p>
+            <div class="loading-progress">
+                <div class="progress-bar">
+                    <div class="progress-fill"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- License Error Screen -->
+    <div id="license-error-screen" class="screen">
+        <div class="error-container">
+            <div class="error-icon">
+                <i class="fas fa-key-skeleton"></i>
+            </div>
+            <h1 class="error-title">Akses Dibatasi</h1>
+            <p id="error-message" class="error-description">Lisensi flashdisk diperlukan untuk mengakses aplikasi</p>
+            <div class="error-actions">
+                <button id="retry-btn" class="btn btn-primary btn-lg">
+                    <i class="fas fa-redo"></i> Coba Lagi
+                </button>
+                <button id="help-btn" class="btn btn-outline">
+                    <i class="fas fa-question-circle"></i> Bantuan
+                </button>
+            </div>
+            <div class="license-info-box">
+                <h3><i class="fas fa-info-circle"></i> Informasi Lisensi</h3>
+                <p>Pasang flashdisk lisensi yang valid untuk melanjutkan. Pastikan file .license.sys ada di root drive.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App Container -->
+    <div id="app-container" class="screen">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="fas fa-shield-alt"></i>
+                    <span>SecureStream</span>
+                </div>
+                <div class="license-badge" id="license-badge">
+                    <i class="fas fa-check-circle"></i>
+                    <span>Lisensi Aktif</span>
+                </div>
+            </div>
+
+            <div class="sidebar-menu">
+                <a href="#" class="menu-item active" data-page="dashboard">
+                    <i class="fas fa-tv"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#" class="menu-item" data-page="streams">
+                    <i class="fas fa-satellite-dish"></i>
+                    <span>Streaming</span>
+                </a>
+                <a href="#" class="menu-item" data-page="cameras">
+                    <i class="fas fa-video"></i>
+                    <span>Kamera</span>
+                </a>
+                <a href="#" class="menu-item" data-page="recordings">
+                    <i class="fas fa-film"></i>
+                    <span>Rekaman</span>
+                </a>
+                <a href="#" class="menu-item" data-page="settings">
+                    <i class="fas fa-cog"></i>
+                    <span>Pengaturan</span>
+                </a>
+                <a href="#" class="menu-item" data-page="license">
+                    <i class="fas fa-key"></i>
+                    <span>Lisensi</span>
+                </a>
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="system-status">
+                    <div class="status-item">
+                        <span class="status-label">MediaMTX</span>
+                        <span class="status-value" id="mediamtx-status">Running</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">CPU</span>
+                        <span class="status-value">42%</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Memory</span>
+                        <span class="status-value">1.2GB</span>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Top Navigation Bar -->
+            <header class="top-bar">
+                <div class="top-bar-left">
+                    <h1 id="page-title" class="page-title">Dashboard</h1>
+                    <div class="breadcrumb">
+                        <span>Home</span>
+                        <i class="fas fa-chevron-right"></i>
+                        <span id="breadcrumb-current">Dashboard</span>
+                    </div>
+                </div>
+                <div class="top-bar-right">
+                    <div class="user-profile">
+                        <div class="avatar">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <div class="user-info">
+                            <span class="user-name">Administrator</span>
+                            <span class="user-role">Super Admin</span>
+                        </div>
+                        <i class="fas fa-chevron-down dropdown-icon"></i>
+                    </div>
+                    <button id="refresh-btn" class="btn btn-icon" title="Refresh">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                    <button id="fullscreen-btn" class="btn btn-icon" title="Fullscreen">
+                        <i class="fas fa-expand"></i>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Content Pages -->
+            <div class="content-wrapper">
+                <!-- Dashboard Page -->
+                <div id="dashboard-page" class="page-content active">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon bg-primary">
+                                <i class="fas fa-video"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3 id="active-streams">0</h3>
+                                <p>Stream Aktif</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon bg-success">
+                                <i class="fas fa-hdd"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3>256 GB</h3>
+                                <p>Penyimpanan Tersedia</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon bg-warning">
+                                <i class="fas fa-clock"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3 id="uptime">7d 14h</h3>
+                                <p>Uptime Sistem</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon bg-danger">
+                                <i class="fas fa-exclamation-triangle"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3 id="alerts">0</h3>
+                                <p>Peringatan Aktif</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="content-grid">
+                        <div class="grid-col-8">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3>Streaming Live</h3>
+                                    <div class="card-actions">
+                                        <button class="btn btn-sm btn-primary" onclick="showAddStreamModal()">
+                                            <i class="fas fa-plus"></i> Tambah Stream
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div class="video-grid" id="video-grid">
+                                        <!-- Video streams will be loaded here -->
+                                        <div class="video-placeholder">
+                                            <i class="fas fa-video-slash"></i>
+                                            <h3>Loading streams...</h3>
+                                            <p>Mohon tunggu...</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="grid-col-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3>Status Sistem</h3>
+                                </div>
+                                <div class="card-body">
+                                    <div class="system-metrics">
+                                        <div class="metric-item">
+                                            <span>MediaMTX Server</span>
+                                            <div class="metric-value">
+                                                <span class="status-badge success" id="server-status">Running</span>
+                                            </div>
+                                        </div>
+                                        <div class="metric-item">
+                                            <span>Lisensi</span>
+                                            <div class="metric-value">
+                                                <span class="status-badge success" id="license-status">Valid</span>
+                                            </div>
+                                        </div>
+                                        <div class="metric-item">
+                                            <span>Flashdisk</span>
+                                            <div class="metric-value">
+                                                <span class="status-badge success" id="flashdisk-status">Terkoneksi</span>
+                                            </div>
+                                        </div>
+                                        <div class="metric-item">
+                                            <span>Koneksi Aktif</span>
+                                            <div class="metric-value">
+                                                <span id="active-connections">0</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="license-details mt-4">
+                                        <h4>Detail Lisensi</h4>
+                                        <div id="license-details">
+                                            <p style="color: var(--gray); font-size: 13px;">Loading license info...</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Streams Page -->
+                <div id="streams-page" class="page-content">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Stream Management</h3>
+                        </div>
+                        <div class="card-body">
+                            <p style="color: var(--gray);">Stream management features coming soon...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cameras Page -->
+                <div id="cameras-page" class="page-content">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Camera Management</h3>
+                        </div>
+                        <div class="card-body">
+                            <p style="color: var(--gray);">Camera management features coming soon...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recordings Page -->
+                <div id="recordings-page" class="page-content">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Recordings</h3>
+                        </div>
+                        <div class="card-body">
+                            <p style="color: var(--gray);">Recording features coming soon...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settings Page -->
+                <div id="settings-page" class="page-content">
+                    <div class="settings-container">
+                        <div class="settings-sidebar">
+                            <div class="settings-menu">
+                                <a href="#" class="settings-menu-item active" data-tab="stream-settings">
+                                    <i class="fas fa-sliders-h"></i>
+                                    <span>Pengaturan Stream</span>
+                                </a>
+                                <a href="#" class="settings-menu-item" data-tab="mediamtx-config">
+                                    <i class="fas fa-server"></i>
+                                    <span>MediaMTX Config</span>
+                                </a>
+                                <a href="#" class="settings-menu-item" data-tab="recording-settings">
+                                    <i class="fas fa-record-vinyl"></i>
+                                    <span>Rekaman</span>
+                                </a>
+                                <a href="#" class="settings-menu-item" data-tab="security-settings">
+                                    <i class="fas fa-shield-alt"></i>
+                                    <span>Keamanan</span>
+                                </a>
+                                <a href="#" class="settings-menu-item" data-tab="system-settings">
+                                    <i class="fas fa-cogs"></i>
+                                    <span>Sistem</span>
+                                </a>
+                            </div>
+                        </div>
+                        <div class="settings-content">
+                            <div class="settings-tab active" id="stream-settings">
+                                <h3>Pengaturan Stream</h3>
+                                <div class="form-group">
+                                    <label for="rtsp-port">Port RTSP</label>
+                                    <input type="number" id="rtsp-port" class="form-control" value="8554">
+                                </div>
+                                <div class="form-group">
+                                    <label for="rtmp-port">Port RTMP</label>
+                                    <input type="number" id="rtmp-port" class="form-control" value="1935">
+                                </div>
+                                <div class="form-group">
+                                    <label for="hls-port">Port HLS</label>
+                                    <input type="number" id="hls-port" class="form-control" value="8888">
+                                </div>
+                                <button class="btn btn-primary">
+                                    <i class="fas fa-save"></i> Simpan Perubahan
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- License Page -->
+                <div id="license-page" class="page-content">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>License Information</h3>
+                        </div>
+                        <div class="card-body">
+                            <div id="license-page-details">
+                                <p style="color: var(--gray);">Loading license information...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div id="add-stream-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Tambah Stream Baru</h3>
+                <button class="modal-close" onclick="closeAllModals()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="stream-form" onsubmit="handleAddStream(event)">
+                    <div class="form-group">
+                        <label for="stream-name">Nama Stream</label>
+                        <input type="text" id="stream-name" class="form-control" placeholder="Camera Lobby" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="stream-type">Tipe Stream</label>
+                        <select id="stream-type" class="form-control">
+                            <option value="hls">HLS</option>
+                            <option value="rtsp">RTSP</option>
+                            <option value="rtmp">RTMP</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="stream-url">URL Stream</label>
+                        <input type="text" id="stream-url" class="form-control" 
+                               placeholder="http://localhost:8888/camera1/index.m3u8" required>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" onclick="closeAllModals()">Batal</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Tambah Stream
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load HLS.js from CDN - MUST BE FIRST -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    
+    <!-- Load video-player.js - MUST BE SECOND -->
+    <script src="video-player.js"></script>
+    
+    <!-- Load renderer.js - MUST BE LAST -->
+    <script src="renderer.js"></script>
+    
+    <!-- Debug script -->
+    <script>
+        console.log("[HTML] Scripts loading order:");
+        console.log("1. HLS.js available:", typeof Hls !== "undefined");
+        console.log("2. Waiting for video-player.js...");
+        console.log("3. Waiting for renderer.js...");
+    </script>
+</body>
+</html>

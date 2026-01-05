@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>MediaMTX Logs</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #0f172a;
+            color: #e2e8f0;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+        
+        .log-container {
+            background: #1e293b;
+            border-radius: 8px;
+            padding: 20px;
+            height: calc(100vh - 40px);
+            overflow-y: auto;
+        }
+        
+        .log-entry {
+            margin-bottom: 4px;
+            padding: 2px 0;
+            border-bottom: 1px solid #334155;
+        }
+        
+        .log-time {
+            color: #94a3b8;
+            margin-right: 10px;
+        }
+        
+        .log-level {
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        
+        .log-level.info { color: #3b82f6; }
+        .log-level.warn { color: #f59e0b; }
+        .log-level.error { color: #ef4444; }
+        .log-level.debug { color: #8b5cf6; }
+        
+        .log-message {
+            color: #cbd5e1;
+        }
+        
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #334155;
+        }
+        
+        .log-header h1 {
+            margin: 0;
+            font-size: 18px;
+            color: #f1f5f9;
+        }
+        
+        .log-controls {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            background: #334155;
+            color: #e2e8f0;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background 0.2s;
+        }
+        
+        .btn:hover {
+            background: #475569;
+        }
+        
+        .btn-primary {
+            background: #3b82f6;
+        }
+        
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+        
+        .btn-danger {
+            background: #ef4444;
+        }
+        
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+    </style>
+</head>
+<body>
+    <div class="log-container">
+        <div class="log-header">
+            <h1>MediaMTX Logs</h1>
+            <div class="log-controls">
+                <button class="btn" id="clear-logs">Clear</button>
+                <button class="btn btn-primary" id="refresh-logs">Refresh</button>
+                <button class="btn btn-danger" id="close-logs">Close</button>
+            </div>
+        </div>
+        <div id="log-entries">
+            <!-- Log entries will be added here -->
+            <div class="log-entry">
+                <span class="log-time">[12:00:00]</span>
+                <span class="log-level info">INFO</span>
+                <span class="log-message">Log viewer initialized</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const logEntries = document.getElementById('log-entries');
+        const clearBtn = document.getElementById('clear-logs');
+        const refreshBtn = document.getElementById('refresh-logs');
+        const closeBtn = document.getElementById('close-logs');
+        
+        // Mock log entries for now
+        const mockLogs = [
+            { time: '12:00:01', level: 'info', message: 'MediaMTX starting...' },
+            { time: '12:00:02', level: 'info', message: 'Loading configuration' },
+            { time: '12:00:03', level: 'info', message: 'RTSP server listening on :8554' },
+            { time: '12:00:04', level: 'info', message: 'RTMP server listening on :1935' },
+            { time: '12:00:05', level: 'info', message: 'HLS server listening on :8888' },
+            { time: '12:00:10', level: 'info', message: 'Stream "camera1" created' },
+            { time: '12:00:11', level: 'info', message: 'Stream "camera2" created' },
+            { time: '12:00:12', level: 'info', message: 'Stream "test" created' },
+            { time: '12:00:15', level: 'info', message: 'All streams initialized' },
+            { time: '12:01:00', level: 'debug', message: 'Client connected to camera1 (192.168.1.100)' },
+            { time: '12:01:30', level: 'warn', message: 'High CPU usage detected (85%)' },
+            { time: '12:02:00', level: 'info', message: 'Client disconnected from camera1' }
+        ];
+        
+        function addLogEntry(log) {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `
+                <span class="log-time">[${log.time}]</span>
+                <span class="log-level ${log.level}">${log.level.toUpperCase()}</span>
+                <span class="log-message">${log.message}</span>
+            `;
+            logEntries.appendChild(entry);
+            logEntries.scrollTop = logEntries.scrollHeight;
+        }
+        
+        function loadLogs() {
+            // Clear existing logs
+            logEntries.innerHTML = '';
+            
+            // Add mock logs
+            mockLogs.forEach(log => addLogEntry(log));
+        }
+        
+        clearBtn.addEventListener('click', () => {
+            logEntries.innerHTML = '';
+            addLogEntry({ 
+                time: new Date().toLocaleTimeString(), 
+                level: 'info', 
+                message: 'Logs cleared' 
+            });
+        });
+        
+        refreshBtn.addEventListener('click', loadLogs);
+        
+        closeBtn.addEventListener('click', () => {
+            window.close();
+        });
+        
+        // Load initial logs
+        loadLogs();
+        
+        // Auto-refresh every 10 seconds
+        setInterval(() => {
+            // In production, this would fetch real logs from MediaMTX
+            addLogEntry({
+                time: new Date().toLocaleTimeString(),
+                level: 'info',
+                message: 'System heartbeat - ' + new Date().toISOString()
+            });
+        }, 10000);
+    </script>
+</body>
+</html>
