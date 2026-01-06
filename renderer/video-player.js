@@ -1,4 +1,4 @@
-// Video Stream Player - Browser Compatible (No ES6 imports)
+// Video Stream Player - Browser Compatible with WebRTC Support
 // HLS.js loaded from CDN in index.html
 
 class VideoStreamPlayer {
@@ -15,9 +15,13 @@ class VideoStreamPlayer {
     this.player = null;
     this.videoElement = null;
     this.hls = null;
+    this.peerConnection = null;
     this.isPlaying = false;
     this.isMuted = false;
     this.volume = 1.0;
+    this.isRecording = false;
+    this.mediaRecorder = null;
+    this.recordedChunks = [];
 
     this.stats = {
       bitrate: 0,
@@ -47,7 +51,7 @@ class VideoStreamPlayer {
         
         <div class="video-container">
           <video id="video-${this.containerId}" class="video-element" 
-                 playsinline webkit-playsinline></video>
+                 playsinline webkit-playsinline muted></video>
           
           <div class="video-overlay">
             <button class="overlay-btn play-btn" title="Play/Pause">
@@ -72,7 +76,7 @@ class VideoStreamPlayer {
               </div>
               <div class="time-display">
                 <span class="current-time">00:00</span> / 
-                <span class="duration">00:00</span>
+                <span class="duration">LIVE</span>
               </div>
             </div>
             
@@ -95,16 +99,16 @@ class VideoStreamPlayer {
         
         <div class="video-stats">
           <div class="stat-item">
+            <span class="stat-label">Protocol:</span>
+            <span class="stat-value stat-protocol">${this.streamConfig.type.toUpperCase()}</span>
+          </div>
+          <div class="stat-item">
             <span class="stat-label">Resolution:</span>
             <span class="stat-value stat-resolution">N/A</span>
           </div>
           <div class="stat-item">
             <span class="stat-label">Bitrate:</span>
             <span class="stat-value stat-bitrate">0 kbps</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">FPS:</span>
-            <span class="stat-value stat-fps">0</span>
           </div>
           <div class="stat-item">
             <span class="stat-label">Buffer:</span>
@@ -122,6 +126,9 @@ class VideoStreamPlayer {
     }</span>
           </div>
           <div class="video-actions">
+            <button class="action-btn refresh-btn" title="Refresh Stream">
+              <i class="fas fa-sync-alt"></i>
+            </button>
             <button class="action-btn edit-btn" title="Edit Stream" data-stream-id="${
               this.streamConfig.id
             }">
@@ -165,7 +172,10 @@ class VideoStreamPlayer {
     const volumeBtn = this.container.querySelector(".volume-btn");
     const volumeSlider = this.container.querySelector(".volume-slider");
 
-    if (volumeBtn) volumeBtn.addEventListener("click", () => this.toggleMute());
+    if (volumeBtn) {
+      volumeBtn.addEventListener("click", () => this.toggleMute());
+    }
+
     if (volumeSlider) {
       volumeSlider.addEventListener("input", (e) => {
         this.setVolume(e.target.value / 100);
@@ -187,7 +197,16 @@ class VideoStreamPlayer {
       recordBtn.addEventListener("click", () => this.toggleRecording());
     }
 
-    // Edit and Delete buttons
+    const settingsBtn = this.container.querySelector(".settings-btn");
+    if (settingsBtn) {
+      settingsBtn.addEventListener("click", () => this.showSettings());
+    }
+
+    const refreshBtn = this.container.querySelector(".refresh-btn");
+    if (refreshBtn) {
+      refreshBtn.addEventListener("click", () => this.refreshStream());
+    }
+
     const editBtn = this.container.querySelector(".edit-btn");
     const deleteBtn = this.container.querySelector(".delete-btn");
 
@@ -229,6 +248,11 @@ class VideoStreamPlayer {
 
       this.videoElement.addEventListener("loadeddata", () => {
         this.updateStatus("connected");
+        this.updateStats();
+      });
+
+      this.videoElement.addEventListener("loadedmetadata", () => {
+        this.updateStats();
       });
 
       this.videoElement.addEventListener("error", (e) => {
@@ -239,6 +263,7 @@ class VideoStreamPlayer {
 
       this.videoElement.addEventListener("timeupdate", () => {
         this.updateTimeDisplay();
+        this.updateStats();
       });
 
       this.videoElement.addEventListener("volumechange", () => {
@@ -254,33 +279,31 @@ class VideoStreamPlayer {
     try {
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      const streamUrls = await window.electronAPI.getStreamUrl(
-        this.streamConfig.name
-      );
-      let streamUrl = streamUrls.hls;
-
-      if (this.streamConfig.type === "rtmp") {
-        streamUrl = streamUrls.rtmp;
-      } else if (this.streamConfig.type === "rtsp") {
-        streamUrl = streamUrls.rtsp;
-      }
-
       console.log(
         `[VideoPlayer] Loading stream: ${this.streamConfig.name} (${this.streamConfig.type})`
       );
-      console.log(`[VideoPlayer] Stream URL: ${streamUrl}`);
 
-      // Check if HLS.js is available
-      if (typeof Hls !== "undefined" && Hls.isSupported()) {
-        this.setupHLSPlayer(streamUrl);
-      } else if (
-        this.videoElement.canPlayType("application/vnd.apple.mpegurl")
-      ) {
-        // Safari native HLS support
-        this.videoElement.src = streamUrl;
-        this.videoElement.load();
+      // Pilih protocol berdasarkan type
+      if (this.streamConfig.type === "webrtc") {
+        // Untuk WebRTC, gunakan URL langsung dari config
+        await this.setupWebRTCPlayer(this.streamConfig.url);
       } else {
-        throw new Error("HLS not supported in this browser");
+        // Untuk HLS/RTSP/RTMP, gunakan electronAPI untuk get URL
+        const streamUrls = await window.electronAPI.getStreamUrl(
+          this.streamConfig.name
+        );
+
+        if (this.streamConfig.type === "hls") {
+          await this.setupHLSPlayer(streamUrls.hls);
+        } else if (this.streamConfig.type === "rtsp") {
+          // RTSP via HLS transcoding
+          await this.setupHLSPlayer(streamUrls.hls);
+        } else if (this.streamConfig.type === "rtmp") {
+          // RTMP via HLS transcoding
+          await this.setupHLSPlayer(streamUrls.hls);
+        } else {
+          throw new Error(`Unsupported stream type: ${this.streamConfig.type}`);
+        }
       }
     } catch (error) {
       console.error("Failed to start stream:", error);
@@ -288,77 +311,189 @@ class VideoStreamPlayer {
     }
   }
 
-  setupHLSPlayer(streamUrl) {
-    if (this.hls) {
-      this.hls.destroy();
+  async setupWebRTCPlayer(streamUrl) {
+    try {
+      console.log("[VideoPlayer] Setting up WebRTC connection");
+      console.log("[VideoPlayer] Stream URL:", streamUrl);
+
+      // MediaMTX WebRTC endpoint format: http://localhost:8889/stream_name/whep
+      // Dari config URL user bisa: http://localhost:8889/drone
+      // Kita perlu tambahkan /whep
+      let webrtcUrl = streamUrl;
+      if (!webrtcUrl.endsWith("/whep")) {
+        webrtcUrl = webrtcUrl + "/whep";
+      }
+
+      console.log("[VideoPlayer] WHEP endpoint:", webrtcUrl);
+
+      this.peerConnection = new RTCPeerConnection({
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+      });
+
+      this.peerConnection.ontrack = (event) => {
+        console.log("[VideoPlayer] Received track:", event.track.kind);
+        if (event.streams && event.streams[0]) {
+          this.videoElement.srcObject = event.streams[0];
+          this.videoElement.play().catch((e) => {
+            console.warn("Autoplay prevented:", e);
+            this.showPlayButton();
+          });
+        }
+      };
+
+      this.peerConnection.oniceconnectionstatechange = () => {
+        console.log(
+          "[VideoPlayer] ICE state:",
+          this.peerConnection.iceConnectionState
+        );
+
+        if (
+          this.peerConnection.iceConnectionState === "connected" ||
+          this.peerConnection.iceConnectionState === "completed"
+        ) {
+          this.updateStatus("connected");
+          this.hideLoading();
+        } else if (
+          this.peerConnection.iceConnectionState === "disconnected" ||
+          this.peerConnection.iceConnectionState === "failed"
+        ) {
+          this.updateStatus("error");
+          this.showError("WebRTC connection failed");
+        }
+      };
+
+      this.peerConnection.onconnectionstatechange = () => {
+        console.log(
+          "[VideoPlayer] Connection state:",
+          this.peerConnection.connectionState
+        );
+      };
+
+      // Create offer
+      const offer = await this.peerConnection.createOffer({
+        offerToReceiveVideo: true,
+        offerToReceiveAudio: true,
+      });
+
+      await this.peerConnection.setLocalDescription(offer);
+
+      console.log("[VideoPlayer] Sending WHEP request to:", webrtcUrl);
+
+      // Send offer to MediaMTX WHEP endpoint
+      const response = await fetch(webrtcUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/sdp",
+        },
+        body: offer.sdp,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("[VideoPlayer] WHEP error response:", errorText);
+        throw new Error(
+          `WHEP request failed: ${response.status} - ${errorText}`
+        );
+      }
+
+      const answerSdp = await response.text();
+      console.log("[VideoPlayer] Received SDP answer");
+
+      await this.peerConnection.setRemoteDescription({
+        type: "answer",
+        sdp: answerSdp,
+      });
+
+      console.log("[VideoPlayer] WebRTC connection established");
+    } catch (error) {
+      console.error("[VideoPlayer] WebRTC setup failed:", error);
+      throw error;
     }
+  }
 
-    this.hls = new Hls({
-      enableWorker: true,
-      lowLatencyMode: true,
-      backBufferLength: 90,
-      maxBufferLength: 30,
-      maxMaxBufferLength: 60,
-      maxBufferSize: 60 * 1000 * 1000,
-      maxBufferHole: 0.5,
-      maxFragLookUpTolerance: 0.25,
-      liveSyncDurationCount: 3,
-      liveMaxLatencyDurationCount: 10,
-      liveDurationInfinity: true,
-      levelLoadingTimeOut: 10000,
-      levelLoadingRetryDelay: 1000,
-      levelLoadingMaxRetry: 4,
-      fragLoadingTimeOut: 20000,
-      fragLoadingMaxRetry: 6,
-      fragLoadingRetryDelay: 1000,
-      startFragPrefetch: true,
-      testBandwidth: true,
-    });
+  async setupHLSPlayer(streamUrl) {
+    if (typeof Hls !== "undefined" && Hls.isSupported()) {
+      if (this.hls) {
+        this.hls.destroy();
+      }
 
-    this.hls.loadSource(streamUrl);
-    this.hls.attachMedia(this.videoElement);
+      this.hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+        backBufferLength: 90,
+        maxBufferLength: 30,
+        maxMaxBufferLength: 60,
+        maxBufferSize: 60 * 1000 * 1000,
+        maxBufferHole: 0.5,
+        maxFragLookUpTolerance: 0.25,
+        liveSyncDurationCount: 3,
+        liveMaxLatencyDurationCount: 10,
+        liveDurationInfinity: true,
+        levelLoadingTimeOut: 10000,
+        levelLoadingRetryDelay: 1000,
+        levelLoadingMaxRetry: 4,
+        fragLoadingTimeOut: 20000,
+        fragLoadingMaxRetry: 6,
+        fragLoadingRetryDelay: 1000,
+        startFragPrefetch: true,
+        testBandwidth: true,
+      });
 
-    this.hls.on(Hls.Events.MANIFEST_PARSED, () => {
-      console.log(
-        `[VideoPlayer] HLS manifest parsed for ${this.streamConfig.name}`
-      );
+      this.hls.loadSource(streamUrl);
+      this.hls.attachMedia(this.videoElement);
+
+      this.hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        console.log(
+          `[VideoPlayer] HLS manifest parsed for ${this.streamConfig.name}`
+        );
+        this.videoElement.play().catch((e) => {
+          console.warn("Autoplay prevented:", e);
+          this.showPlayButton();
+        });
+      });
+
+      this.hls.on(Hls.Events.ERROR, (event, data) => {
+        console.error(
+          `[VideoPlayer] HLS error for ${this.streamConfig.name}:`,
+          data
+        );
+
+        if (data.fatal) {
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              console.log("Network error, trying to recover...");
+              this.hls.startLoad();
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              console.log("Media error, trying to recover...");
+              this.hls.recoverMediaError();
+              break;
+            default:
+              console.log("Fatal error, cannot recover");
+              this.showError("Stream error: " + data.details);
+              break;
+          }
+        }
+      });
+
+      this.hls.on(Hls.Events.LEVEL_SWITCHED, () => {
+        this.updateStats();
+      });
+
+      this.hls.on(Hls.Events.FRAG_BUFFERED, () => {
+        this.updateStats();
+      });
+    } else if (this.videoElement.canPlayType("application/vnd.apple.mpegurl")) {
+      // Safari native HLS support
+      this.videoElement.src = streamUrl;
+      this.videoElement.load();
       this.videoElement.play().catch((e) => {
         console.warn("Autoplay prevented:", e);
         this.showPlayButton();
       });
-    });
-
-    this.hls.on(Hls.Events.ERROR, (event, data) => {
-      console.error(
-        `[VideoPlayer] HLS error for ${this.streamConfig.name}:`,
-        data
-      );
-
-      if (data.fatal) {
-        switch (data.type) {
-          case Hls.ErrorTypes.NETWORK_ERROR:
-            console.log("Network error, trying to recover...");
-            this.hls.startLoad();
-            break;
-          case Hls.ErrorTypes.MEDIA_ERROR:
-            console.log("Media error, trying to recover...");
-            this.hls.recoverMediaError();
-            break;
-          default:
-            console.log("Fatal error, cannot recover");
-            this.showError("Stream error: " + data.details);
-            break;
-        }
-      }
-    });
-
-    this.hls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
-      this.updateStats();
-    });
-
-    this.hls.on(Hls.Events.FRAG_BUFFERED, (event, data) => {
-      this.updateStats();
-    });
+    } else {
+      throw new Error("HLS not supported in this browser");
+    }
   }
 
   play() {
@@ -388,40 +523,158 @@ class VideoStreamPlayer {
     if (this.videoElement) {
       this.videoElement.volume = volume;
       this.volume = volume;
+      if (volume > 0) {
+        this.videoElement.muted = false;
+        this.isMuted = false;
+      }
       this.updateVolumeButton();
     }
   }
 
   toggleFullscreen() {
+    const videoContainer = this.container.querySelector(".video-container");
+
     if (!document.fullscreenElement) {
-      this.container.requestFullscreen().catch((err) => {
-        console.error("Fullscreen failed:", err);
-      });
+      if (videoContainer.requestFullscreen) {
+        videoContainer.requestFullscreen();
+      } else if (videoContainer.webkitRequestFullscreen) {
+        videoContainer.webkitRequestFullscreen();
+      } else if (videoContainer.msRequestFullscreen) {
+        videoContainer.msRequestFullscreen();
+      }
     } else {
-      document.exitFullscreen();
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      } else if (document.msExitFullscreen) {
+        document.msExitFullscreen();
+      }
     }
   }
 
   takeSnapshot() {
-    if (!this.videoElement || this.videoElement.readyState < 2) return;
+    if (!this.videoElement || this.videoElement.readyState < 2) {
+      this.showNotification("Video not ready for snapshot");
+      return;
+    }
 
     const canvas = document.createElement("canvas");
-    canvas.width = this.videoElement.videoWidth;
-    canvas.height = this.videoElement.videoHeight;
+    canvas.width = this.videoElement.videoWidth || 1280;
+    canvas.height = this.videoElement.videoHeight || 720;
 
     const ctx = canvas.getContext("2d");
-    ctx.drawImage(this.videoElement, 0, 0);
+    ctx.drawImage(this.videoElement, 0, 0, canvas.width, canvas.height);
 
-    const link = document.createElement("a");
-    link.download = `snapshot_${this.streamConfig.name}_${Date.now()}.png`;
-    link.href = canvas.toDataURL("image/png");
-    link.click();
+    canvas.toBlob((blob) => {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.download = `snapshot_${this.streamConfig.name}_${Date.now()}.png`;
+      link.href = url;
+      link.click();
+      URL.revokeObjectURL(url);
 
-    this.showNotification("Snapshot saved!");
+      this.showNotification("Snapshot saved!");
+    }, "image/png");
   }
 
   toggleRecording() {
-    this.showNotification("Recording feature coming soon!");
+    if (!this.isRecording) {
+      this.startRecording();
+    } else {
+      this.stopRecording();
+    }
+  }
+
+  async startRecording() {
+    try {
+      const stream = this.videoElement.captureStream
+        ? this.videoElement.captureStream()
+        : this.videoElement.mozCaptureStream();
+
+      if (!stream) {
+        throw new Error("Cannot capture stream");
+      }
+
+      const options = { mimeType: "video/webm;codecs=vp8" };
+
+      if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+        options.mimeType = "video/webm";
+      }
+
+      this.mediaRecorder = new MediaRecorder(stream, options);
+      this.recordedChunks = [];
+
+      this.mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          this.recordedChunks.push(e.data);
+        }
+      };
+
+      this.mediaRecorder.onstop = () => {
+        const blob = new Blob(this.recordedChunks, { type: "video/webm" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.download = `recording_${
+          this.streamConfig.name
+        }_${Date.now()}.webm`;
+        link.href = url;
+        link.click();
+        URL.revokeObjectURL(url);
+
+        this.showNotification("Recording saved!");
+      };
+
+      this.mediaRecorder.start(1000); // 1 second chunks
+      this.isRecording = true;
+
+      const recordBtn = this.container.querySelector(".record-btn");
+      if (recordBtn) {
+        recordBtn.style.color = "#ef4444";
+        recordBtn.querySelector("i").className = "fas fa-stop";
+      }
+
+      this.showNotification("Recording started...");
+    } catch (error) {
+      console.error("Recording failed:", error);
+      this.showNotification("Recording failed: " + error.message);
+    }
+  }
+
+  stopRecording() {
+    if (this.mediaRecorder && this.isRecording) {
+      this.mediaRecorder.stop();
+      this.isRecording = false;
+
+      const recordBtn = this.container.querySelector(".record-btn");
+      if (recordBtn) {
+        recordBtn.style.color = "";
+        recordBtn.querySelector("i").className = "fas fa-circle";
+      }
+    }
+  }
+
+  showSettings() {
+    const settings = `
+Stream Settings:
+- Name: ${this.streamConfig.displayName || this.streamConfig.name}
+- Type: ${this.streamConfig.type.toUpperCase()}
+- URL: ${this.streamConfig.url}
+- Resolution: ${this.videoElement?.videoWidth || 0}x${
+      this.videoElement?.videoHeight || 0
+    }
+- State: ${this.isPlaying ? "Playing" : "Paused"}
+    `.trim();
+
+    alert(settings);
+  }
+
+  refreshStream() {
+    console.log("[VideoPlayer] Refreshing stream...");
+    this.destroy();
+    setTimeout(() => {
+      this.init();
+    }, 500);
   }
 
   updateStatus(status) {
@@ -481,13 +734,9 @@ class VideoStreamPlayer {
     if (!this.videoElement) return;
 
     const currentTime = this.formatTime(this.videoElement.currentTime);
-    const duration = this.formatTime(this.videoElement.duration || 0);
-
     const currentTimeEl = this.container.querySelector(".current-time");
-    const durationEl = this.container.querySelector(".duration");
 
     if (currentTimeEl) currentTimeEl.textContent = currentTime;
-    if (durationEl) durationEl.textContent = duration;
   }
 
   formatTime(seconds) {
@@ -502,6 +751,7 @@ class VideoStreamPlayer {
   updateStats() {
     if (!this.videoElement) return;
 
+    // Update resolution
     if (this.videoElement.videoWidth && this.videoElement.videoHeight) {
       const resolutionEl = this.container.querySelector(".stat-resolution");
       if (resolutionEl) {
@@ -509,6 +759,7 @@ class VideoStreamPlayer {
       }
     }
 
+    // Update bitrate from HLS
     if (this.hls && this.hls.levels && this.hls.currentLevel !== -1) {
       const level = this.hls.levels[this.hls.currentLevel];
       if (level) {
@@ -516,6 +767,17 @@ class VideoStreamPlayer {
         if (bitrateEl) {
           bitrateEl.textContent = `${Math.round(level.bitrate / 1000)} kbps`;
         }
+      }
+    }
+
+    // Update buffer
+    if (this.videoElement.buffered.length > 0) {
+      const buffered =
+        this.videoElement.buffered.end(this.videoElement.buffered.length - 1) -
+        this.videoElement.currentTime;
+      const bufferEl = this.container.querySelector(".stat-buffer");
+      if (bufferEl) {
+        bufferEl.textContent = `${buffered.toFixed(1)}s`;
       }
     }
   }
@@ -526,6 +788,11 @@ class VideoStreamPlayer {
     }
     if (this.overlay) {
       this.overlay.style.display = "flex";
+    }
+
+    const playBtn = this.container.querySelector(".play-btn");
+    if (playBtn) {
+      playBtn.style.display = "none";
     }
   }
 
@@ -546,6 +813,9 @@ class VideoStreamPlayer {
     if (this.loadingSpinner) {
       this.loadingSpinner.style.display = "none";
     }
+    if (this.overlay) {
+      this.overlay.style.display = "flex";
+    }
   }
 
   showError(message) {
@@ -565,7 +835,7 @@ class VideoStreamPlayer {
       this.overlay.style.display = "flex";
 
       errorDiv.querySelector(".retry-btn").addEventListener("click", () => {
-        this.startStream();
+        this.refreshStream();
       });
     }
   }
@@ -588,6 +858,7 @@ class VideoStreamPlayer {
       opacity: 0;
       transform: translateY(20px);
       transition: all 0.3s;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
     `;
 
     document.body.appendChild(notification);
@@ -607,14 +878,28 @@ class VideoStreamPlayer {
   }
 
   destroy() {
+    // Stop recording if active
+    if (this.isRecording) {
+      this.stopRecording();
+    }
+
+    // Destroy HLS
     if (this.hls) {
       this.hls.destroy();
       this.hls = null;
     }
 
+    // Close WebRTC connection
+    if (this.peerConnection) {
+      this.peerConnection.close();
+      this.peerConnection = null;
+    }
+
+    // Clean up video element
     if (this.videoElement) {
       this.videoElement.pause();
       this.videoElement.src = "";
+      this.videoElement.srcObject = null;
       this.videoElement.load();
       this.videoElement = null;
     }
@@ -649,11 +934,20 @@ class StreamManager {
       {
         id: "1",
         name: "drone",
-        displayName: "Drone Live",
-        type: "hls", // Pakai HLS bukan RTMP
-        url: "http://localhost:8888/drone/index.m3u8", // HLS dari localhost
+        displayName: "Drone Live (HLS)",
+        type: "hls",
+        url: "http://localhost:8888/drone/index.m3u8",
         enabled: true,
         position: 0,
+      },
+      {
+        id: "2",
+        name: "drone_webrtc",
+        displayName: "Drone Live (WebRTC)",
+        type: "webrtc",
+        url: "http://localhost:8889/drone",
+        enabled: true,
+        position: 1,
       },
     ];
   }
@@ -677,6 +971,16 @@ class StreamManager {
     if (index !== -1) {
       this.streams[index] = { ...this.streams[index], ...updates };
       await this.saveConfig();
+
+      // Reload the player if it exists
+      const containerId = `video-player-${id}`;
+      if (this.players.has(containerId)) {
+        this.destroyPlayer(containerId);
+        setTimeout(() => {
+          this.createPlayer(containerId, id);
+        }, 500);
+      }
+
       return this.streams[index];
     }
     return null;
@@ -685,9 +989,10 @@ class StreamManager {
   async deleteStreamById(id) {
     const index = this.streams.findIndex((s) => s.id === id);
     if (index !== -1) {
-      if (this.players.has(id)) {
-        this.players.get(id).destroy();
-        this.players.delete(id);
+      const containerId = `video-player-${id}`;
+      if (this.players.has(containerId)) {
+        this.players.get(containerId).destroy();
+        this.players.delete(containerId);
       }
 
       this.streams.splice(index, 1);
@@ -766,4 +1071,4 @@ class StreamManager {
 
 // Global instance
 window.streamManager = new StreamManager();
-console.log("[VideoPlayer] StreamManager initialized");
+console.log("[VideoPlayer] StreamManager initialized with WebRTC support");

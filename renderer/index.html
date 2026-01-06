@@ -19,7 +19,7 @@
                 <div class="pulse-ring delay-1"></div>
                 <div class="pulse-ring delay-2"></div>
             </div>
-            <h1 class="app-title">SecureStream Pro</h1>
+            <h1 class="app-title">AirSea Drone Narada</h1>
             <p class="loading-text">Memeriksa lisensi dan memulai layanan...</p>
             <div class="loading-progress">
                 <div class="progress-bar">
@@ -254,7 +254,7 @@
                     </div>
                 </div>
 
-                <!-- Streams Page -->
+                <!-- Other pages remain the same... -->
                 <div id="streams-page" class="page-content">
                     <div class="card">
                         <div class="card-header">
@@ -266,7 +266,6 @@
                     </div>
                 </div>
 
-                <!-- Cameras Page -->
                 <div id="cameras-page" class="page-content">
                     <div class="card">
                         <div class="card-header">
@@ -278,7 +277,6 @@
                     </div>
                 </div>
 
-                <!-- Recordings Page -->
                 <div id="recordings-page" class="page-content">
                     <div class="card">
                         <div class="card-header">
@@ -290,7 +288,6 @@
                     </div>
                 </div>
 
-                <!-- Settings Page -->
                 <div id="settings-page" class="page-content">
                     <div class="settings-container">
                         <div class="settings-sidebar">
@@ -332,6 +329,10 @@
                                     <label for="hls-port">Port HLS</label>
                                     <input type="number" id="hls-port" class="form-control" value="8888">
                                 </div>
+                                <div class="form-group">
+                                    <label for="webrtc-port">Port WebRTC</label>
+                                    <input type="number" id="webrtc-port" class="form-control" value="8889">
+                                </div>
                                 <button class="btn btn-primary">
                                     <i class="fas fa-save"></i> Simpan Perubahan
                                 </button>
@@ -340,7 +341,6 @@
                     </div>
                 </div>
 
-                <!-- License Page -->
                 <div id="license-page" class="page-content">
                     <div class="card">
                         <div class="card-header">
@@ -357,7 +357,7 @@
         </main>
     </div>
 
-    <!-- Modals -->
+    <!-- Add Stream Modal with WebRTC option -->
     <div id="add-stream-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -365,7 +365,7 @@
                 <button class="modal-close" onclick="closeAllModals()">&times;</button>
             </div>
             <div class="modal-body">
-                <form id="stream-form" onsubmit="handleAddStream(event)">
+                <form id="stream-form">
                     <div class="form-group">
                         <label for="stream-name">Nama Stream</label>
                         <input type="text" id="stream-name" class="form-control" placeholder="Camera Lobby" required>
@@ -373,15 +373,26 @@
                     <div class="form-group">
                         <label for="stream-type">Tipe Stream</label>
                         <select id="stream-type" class="form-control">
-                            <option value="hls">HLS</option>
+                            <option value="hls">HLS (HTTP Live Streaming)</option>
+                            <option value="webrtc">WebRTC (Low Latency)</option>
                             <option value="rtsp">RTSP</option>
                             <option value="rtmp">RTMP</option>
                         </select>
+                        <small style="color: var(--gray); font-size: 12px; display: block; margin-top: 5px;">
+                            <i class="fas fa-info-circle"></i> WebRTC memberikan latency terendah (~100ms)
+                        </small>
                     </div>
                     <div class="form-group">
                         <label for="stream-url">URL Stream</label>
                         <input type="text" id="stream-url" class="form-control" 
                                placeholder="http://localhost:8888/camera1/index.m3u8" required>
+                        <small style="color: var(--gray); font-size: 12px; display: block; margin-top: 5px;">
+                            Contoh:<br>
+                            • HLS: http://localhost:8888/stream/index.m3u8<br>
+                            • WebRTC: http://localhost:8889/stream (tanpa /whep)<br>
+                            • RTSP: rtsp://localhost:8554/stream<br>
+                            • RTMP: rtmp://localhost:1935/stream
+                        </small>
                     </div>
                     <div class="form-actions">
                         <button type="button" class="btn btn-secondary" onclick="closeAllModals()">Batal</button>
