@@ -97,6 +97,7 @@ async function loadAssets() {
     // Load logo image
     const logoPath = await window.electronAPI.getAssetPath("narada.png");
     const logoImg = document.getElementById("logo-img");
+    const logoImg2 = document.getElementById("logo-img2");
     const logoIcon = document.getElementById("logo-icon");
 
     if (logoImg && logoPath) {
@@ -105,11 +106,14 @@ async function loadAssets() {
       img.onload = () => {
         logoImg.src = `file://${logoPath}`;
         logoImg.style.display = "inline";
+        logoImg2.src = `file://${logoPath}`;
+        logoImg2.style.display = "inline";
         if (logoIcon) logoIcon.style.display = "none";
       };
       img.onerror = () => {
         console.warn("[Renderer] Logo image not found, using icon");
         if (logoImg) logoImg.style.display = "none";
+        if (logoImg2) logoImg.style.display = "none";
         if (logoIcon) logoIcon.style.display = "inline";
       };
       img.src = `file://${logoPath}`;
@@ -120,6 +124,7 @@ async function loadAssets() {
     const logoImg = document.getElementById("logo-img");
     const logoIcon = document.getElementById("logo-icon");
     if (logoImg) logoImg.style.display = "none";
+    if (logoImg2) logoImg.style.display = "none";
     if (logoIcon) logoIcon.style.display = "inline";
   }
 }
