@@ -1,4 +1,4 @@
-// Main Renderer Process
+// Main Renderer Process - Single Stream View with Navigation
 let streamManager;
 let currentLicense;
 let videoGrid;
@@ -6,7 +6,7 @@ let appContainer;
 let errorScreen;
 let loadingScreen;
 let errorMessage;
-let currentLayout = "4";
+let currentStreamIndex = 0; // Track current stream being displayed
 
 // Initialize DOM elements
 function initDOM() {
@@ -94,14 +94,12 @@ function updateMediaMTXUI(status) {
 
 async function loadAssets() {
   try {
-    // Load logo image
     const logoPath = await window.electronAPI.getAssetPath("narada.png");
     const logoImg = document.getElementById("logo-img");
     const logoImg2 = document.getElementById("logo-img2");
     const logoIcon = document.getElementById("logo-icon");
 
     if (logoImg && logoPath) {
-      // Check if file exists by trying to load it
       const img = new Image();
       img.onload = () => {
         logoImg.src = `file://${logoPath}`;
@@ -113,23 +111,22 @@ async function loadAssets() {
       img.onerror = () => {
         console.warn("[Renderer] Logo image not found, using icon");
         if (logoImg) logoImg.style.display = "none";
-        if (logoImg2) logoImg.style.display = "none";
+        if (logoImg2) logoImg2.style.display = "none";
         if (logoIcon) logoIcon.style.display = "inline";
       };
       img.src = `file://${logoPath}`;
     }
   } catch (error) {
     console.error("[Renderer] Error loading assets:", error);
-    // Fallback to icon if image fails
     const logoImg = document.getElementById("logo-img");
+    const logoImg2 = document.getElementById("logo-img2");
     const logoIcon = document.getElementById("logo-icon");
     if (logoImg) logoImg.style.display = "none";
-    if (logoImg2) logoImg.style.display = "none";
+    if (logoImg2) logoImg2.style.display = "none";
     if (logoIcon) logoIcon.style.display = "inline";
   }
 }
 
-// Call loadAssets when DOM is ready
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", () => {
     loadAssets();
@@ -142,7 +139,6 @@ if (document.readyState === "loading") {
 function setupEventListeners() {
   console.log("[Renderer] Setting up event listeners");
 
-  // License check buttons
   const retryBtn = document.getElementById("retry-btn");
   const helpBtn = document.getElementById("help-btn");
 
@@ -161,7 +157,6 @@ function setupEventListeners() {
     });
   }
 
-  // Menu items
   const menuItems = document.querySelectorAll(".menu-item");
   menuItems.forEach((item) => {
     item.addEventListener("click", (e) => {
@@ -183,7 +178,7 @@ function setupEventListeners() {
       console.log("[Renderer] MediaMTX status received:", status);
       updateMediaMTXUI(status);
     });
-    // Top bar buttons
+
     const refreshBtn = document.getElementById("refresh-btn");
     const fullscreenBtn = document.getElementById("fullscreen-btn");
 
@@ -237,7 +232,6 @@ function setupEventListeners() {
 function setupUI() {
   console.log("[Renderer] Setting up UI");
 
-  // Modal close buttons
   const modalCloseBtns = document.querySelectorAll(".modal-close");
   modalCloseBtns.forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -245,13 +239,9 @@ function setupUI() {
     });
   });
 
-  // Stream form - PERBAIKAN DI SINI
   const streamForm = document.getElementById("stream-form");
   if (streamForm) {
-    // Remove inline onsubmit handler
     streamForm.removeAttribute("onsubmit");
-
-    // Add proper event listener
     streamForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       console.log("[Renderer] Form submitted");
@@ -259,7 +249,6 @@ function setupUI() {
     });
   }
 
-  // Click outside modal to close
   const modals = document.querySelectorAll(".modal");
   modals.forEach((modal) => {
     modal.addEventListener("click", (e) => {
@@ -274,7 +263,6 @@ function setupUI() {
 function switchPage(pageName) {
   console.log("[Renderer] Switching to page:", pageName);
 
-  // Update menu items
   document.querySelectorAll(".menu-item").forEach((item) => {
     item.classList.remove("active");
     if (item.dataset.page === pageName) {
@@ -282,7 +270,6 @@ function switchPage(pageName) {
     }
   });
 
-  // Update page content
   document.querySelectorAll(".page-content").forEach((page) => {
     page.classList.remove("active");
   });
@@ -292,7 +279,6 @@ function switchPage(pageName) {
     targetPage.classList.add("active");
   }
 
-  // Update page title and breadcrumb
   const titles = {
     dashboard: "Dashboard",
     streams: "Streaming",
@@ -310,9 +296,9 @@ function switchPage(pageName) {
     breadcrumbCurrent.textContent = titles[pageName] || pageName;
 }
 
-// Load streams
+// Load streams - MODIFIED untuk single stream view
 async function loadStreams() {
-  console.log("[Renderer] Loading streams");
+  console.log("[Renderer] Loading streams (single view mode)");
 
   if (!streamManager) {
     console.error("[Renderer] StreamManager not initialized");
@@ -320,7 +306,7 @@ async function loadStreams() {
   }
 
   const streams = streamManager.getAllStreams();
-  console.log(`[Renderer] Loading ${streams.length} streams`);
+  console.log(`[Renderer] Available streams: ${streams.length}`);
 
   if (streams.length === 0) {
     showNoStreamsMessage();
@@ -333,38 +319,108 @@ async function loadStreams() {
     activeStreamsEl.textContent = streams.length;
   }
 
+  // Reset ke stream pertama jika index melebihi
+  if (currentStreamIndex >= streams.length) {
+    currentStreamIndex = 0;
+  }
+
   // Clear video grid
   if (videoGrid) {
     videoGrid.innerHTML = "";
-    videoGrid.className = `video-grid`;
+    videoGrid.className = "video-grid single-stream-view";
   }
 
-  // Create players
-  for (let i = 0; i < 1; i++) {
-    const stream = streams[i];
-    const playerId = `video-player-${stream.id}`;
-    const playerContainer = document.createElement("div");
-    playerContainer.id = playerId;
-    playerContainer.className = "video-player-container";
+  // Create player hanya untuk stream yang aktif
+  const stream = streams[currentStreamIndex];
+  const playerId = `video-player-${stream.id}`;
+  const playerContainer = document.createElement("div");
+  playerContainer.id = playerId;
+  playerContainer.className = "video-player-container active-stream";
 
-    videoGrid.appendChild(playerContainer);
+  videoGrid.appendChild(playerContainer);
 
-    // Create player with delay to avoid overwhelming the system
-    setTimeout(() => {
-      try {
-        console.log(`[Renderer] Creating player for stream: ${stream.name}`);
-        streamManager.createPlayer(playerId, stream.id);
-      } catch (error) {
-        console.error(
-          `[Renderer] Failed to create player for stream ${stream.id}:`,
-          error
-        );
-      }
-    }, i * 500);
-  }
+  // Tambahkan stream indicator
+  addStreamIndicator(currentStreamIndex, streams.length);
 
-  setLayout(currentLayout);
+  setTimeout(() => {
+    try {
+      console.log(
+        `[Renderer] Creating player for stream: ${stream.name} (${
+          currentStreamIndex + 1
+        }/${streams.length})`
+      );
+      streamManager.createPlayer(playerId, stream.id);
+    } catch (error) {
+      console.error(`[Renderer] Failed to create player:`, error);
+    }
+  }, 300);
 }
+
+// Tambahkan indicator stream yang aktif
+function addStreamIndicator(currentIndex, totalStreams) {
+  if (!videoGrid) return;
+
+  const indicator = document.createElement("div");
+  indicator.className = "stream-indicator";
+  indicator.innerHTML = `
+    <div class="indicator-content">
+      <button class="indicator-btn prev-btn" onclick="window.switchToPreviousStream()" ${
+        totalStreams <= 1 ? "disabled" : ""
+      }>
+        <i class="fas fa-chevron-left"></i>
+      </button>
+      <span class="indicator-text">
+        Stream ${currentIndex + 1} of ${totalStreams}
+      </span>
+      <button class="indicator-btn next-btn" onclick="window.switchToNextStream()" ${
+        totalStreams <= 1 ? "disabled" : ""
+      }>
+        <i class="fas fa-chevron-right"></i>
+      </button>
+    </div>
+  `;
+
+  videoGrid.appendChild(indicator);
+}
+
+// Function untuk switch ke stream berikutnya
+window.switchToNextStream = function () {
+  if (!streamManager) return;
+
+  const streams = streamManager.getAllStreams();
+  if (streams.length <= 1) return;
+
+  currentStreamIndex = (currentStreamIndex + 1) % streams.length;
+  console.log(
+    `[Renderer] Switching to next stream: index ${currentStreamIndex}`
+  );
+
+  // Destroy semua player yang ada
+  streamManager.destroyAllPlayers();
+
+  // Load ulang dengan index baru
+  loadStreams();
+};
+
+// Function untuk switch ke stream sebelumnya
+window.switchToPreviousStream = function () {
+  if (!streamManager) return;
+
+  const streams = streamManager.getAllStreams();
+  if (streams.length <= 1) return;
+
+  currentStreamIndex =
+    currentStreamIndex - 1 < 0 ? streams.length - 1 : currentStreamIndex - 1;
+  console.log(
+    `[Renderer] Switching to previous stream: index ${currentStreamIndex}`
+  );
+
+  // Destroy semua player yang ada
+  streamManager.destroyAllPlayers();
+
+  // Load ulang dengan index baru
+  loadStreams();
+};
 
 // Show no streams message
 function showNoStreamsMessage() {
@@ -389,17 +445,7 @@ function showNoStreamsMessage() {
   }
 }
 
-// Set layout
-function setLayout(layout) {
-  console.log("[Renderer] Setting layout:", layout);
-  currentLayout = layout;
-
-  if (videoGrid) {
-    videoGrid.className = `video-grid layout-${layout}`;
-  }
-}
-
-// Show add stream modal - MAKE IT GLOBAL
+// Show add stream modal
 window.showAddStreamModal = function () {
   console.log("[Renderer] Opening add stream modal");
 
@@ -407,13 +453,11 @@ window.showAddStreamModal = function () {
   if (modal) {
     modal.classList.add("active");
 
-    // Reset form
     const form = document.getElementById("stream-form");
     if (form) {
       form.reset();
       delete form.dataset.editId;
 
-      // Reset submit button text
       const submitBtn = form.querySelector('button[type="submit"]');
       if (submitBtn) {
         submitBtn.innerHTML = '<i class="fas fa-plus"></i> Tambah Stream';
@@ -431,7 +475,6 @@ window.showEditStreamModal = function (stream) {
 
   modal.classList.add("active");
 
-  // Fill form with stream data
   const nameInput = document.getElementById("stream-name");
   const typeSelect = document.getElementById("stream-type");
   const urlInput = document.getElementById("stream-url");
@@ -440,7 +483,6 @@ window.showEditStreamModal = function (stream) {
   if (typeSelect) typeSelect.value = stream.type;
   if (urlInput) urlInput.value = stream.url;
 
-  // Change submit button to update
   const form = document.getElementById("stream-form");
   if (form) {
     form.dataset.editId = stream.id;
@@ -451,7 +493,7 @@ window.showEditStreamModal = function (stream) {
   }
 };
 
-// Handle add/edit stream - PERBAIKAN DI SINI
+// Handle add/edit stream
 async function handleAddStream(event) {
   console.log("[Renderer] Handling add/edit stream");
 
@@ -480,7 +522,6 @@ async function handleAddStream(event) {
     return;
   }
 
-  // Validate URL format
   try {
     new URL(url);
   } catch (e) {
@@ -499,13 +540,11 @@ async function handleAddStream(event) {
     console.log("[Renderer] Stream config:", streamConfig);
 
     if (form.dataset.editId) {
-      // Update existing stream
       console.log("[Renderer] Updating stream:", form.dataset.editId);
       await streamManager.updateStream(form.dataset.editId, streamConfig);
       delete form.dataset.editId;
       console.log("[Renderer] Stream updated successfully");
     } else {
-      // Add new stream
       console.log("[Renderer] Adding new stream");
       await streamManager.addStream(streamConfig);
       console.log("[Renderer] Stream added successfully");
@@ -513,7 +552,6 @@ async function handleAddStream(event) {
 
     closeAllModals();
 
-    // Reload streams
     setTimeout(() => {
       loadStreams();
     }, 300);
@@ -531,7 +569,6 @@ function closeAllModals() {
     modal.classList.remove("active");
   });
 
-  // Reset forms
   const forms = document.querySelectorAll(".modal form");
   forms.forEach((form) => {
     form.reset();
@@ -544,10 +581,8 @@ function closeAllModals() {
   });
 }
 
-// Make closeAllModals global
 window.closeAllModals = closeAllModals;
 
-// Handle license status
 // Handle license status
 function handleLicenseStatus(status) {
   console.log("[Renderer] License status received:", status);
@@ -558,7 +593,6 @@ function handleLicenseStatus(status) {
 
     updateLicenseInfo(status);
 
-    // Periksa status MediaMTX secara terpisah
     if (window.electronAPI) {
       window.electronAPI
         .getMediaMTXStatus()
@@ -575,7 +609,6 @@ function handleLicenseStatus(status) {
             }
           } else {
             console.warn("[Renderer] MediaMTX not running");
-            // Tetap tampilkan aplikasi, tapi beri peringatan
             showMediaMTXWarning(
               "MediaMTX server is not running. Video streaming may not work."
             );
@@ -583,11 +616,9 @@ function handleLicenseStatus(status) {
         })
         .catch((error) => {
           console.error("[Renderer] Error getting MediaMTX status:", error);
-          // Tetap tampilkan aplikasi meski ada error
           initializeApp();
         });
     } else {
-      // Jika electronAPI tidak tersedia, tetap coba initialize
       setTimeout(() => {
         initializeApp();
       }, 1000);
@@ -601,9 +632,7 @@ function handleLicenseStatus(status) {
   }
 }
 
-// Fungsi untuk menunjukkan peringatan MediaMTX
 function showMediaMTXWarning(message) {
-  // Buat notifikasi peringatan
   const warning = document.createElement("div");
   warning.className = "media-mtx-warning";
   warning.innerHTML = `
@@ -624,7 +653,6 @@ function showMediaMTXWarning(message) {
 
   document.body.appendChild(warning);
 
-  // Hapus otomatis setelah 10 detik
   setTimeout(() => {
     if (warning.parentElement) {
       warning.remove();
@@ -636,7 +664,6 @@ function showMediaMTXWarning(message) {
 function updateLicenseInfo(status) {
   console.log("[Renderer] Updating license info");
 
-  // Update license badge
   const licenseBadge = document.getElementById("license-badge");
   if (licenseBadge && status.valid) {
     licenseBadge.innerHTML = `
@@ -645,7 +672,6 @@ function updateLicenseInfo(status) {
     `;
   }
 
-  // Update license status
   const licenseStatus = document.getElementById("license-status");
   if (licenseStatus) {
     licenseStatus.textContent = status.valid ? "Valid" : "Invalid";
@@ -654,7 +680,6 @@ function updateLicenseInfo(status) {
     }`;
   }
 
-  // Update flashdisk status
   const flashdiskStatus = document.getElementById("flashdisk-status");
   if (flashdiskStatus) {
     flashdiskStatus.textContent = status.drive
@@ -665,7 +690,6 @@ function updateLicenseInfo(status) {
     }`;
   }
 
-  // Update license details
   const licenseDetails = document.getElementById("license-details");
   if (licenseDetails && status.data) {
     const expiryDate = status.data.expiry
@@ -699,8 +723,6 @@ function updateLicenseInfo(status) {
       </div>
     `;
   }
-
-  // Update MediaMTX status akan dilakukan secara terpisah
 }
 
 // Check license manually
@@ -721,7 +743,6 @@ async function checkLicense() {
   }
 }
 
-// Make loadStreams globally available
 window.loadStreams = loadStreams;
 
 // Initialize when DOM is ready
@@ -731,7 +752,6 @@ if (document.readyState === "loading") {
     initDOM();
     setupEventListeners();
 
-    // Cek status lisensi segera setelah DOM siap
     setTimeout(() => {
       checkLicense();
     }, 500);
@@ -741,11 +761,10 @@ if (document.readyState === "loading") {
   initDOM();
   setupEventListeners();
 
-  // Cek status lisensi segera
   setTimeout(() => {
     checkLicense();
   }, 500);
 }
 
-console.log("[Renderer] Renderer.js loaded");
+console.log("[Renderer] Renderer.js loaded - Single Stream View Mode");
 console.log("[Renderer] electronAPI available:", !!window.electronAPI);

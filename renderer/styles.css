@@ -637,6 +637,101 @@ body {
     min-height: 400px;
 }
 
+/* Tambahkan di bagian VIDEO PLAYER STYLES */
+
+/* Single Stream View Layout */
+#video-grid.single-stream-view {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-height: 500px;
+    align-items: center;
+    justify-content: center;
+}
+
+#video-grid.single-stream-view .video-player-container {
+    width: 100%;
+    max-width: 1200px;
+}
+
+/* Stream Indicator */
+.stream-indicator {
+    width: 100%;
+    max-width: 1200px;
+    background: var(--dark);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 15px 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.indicator-content {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.indicator-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    background: rgba(59, 130, 246, 0.2);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    color: var(--primary);
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s;
+}
+
+.indicator-btn:hover:not(:disabled) {
+    background: rgba(59, 130, 246, 0.3);
+    transform: scale(1.1);
+}
+
+.indicator-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.indicator-text {
+    font-size: 14px;
+    font-weight: 600;
+    color: white;
+    min-width: 120px;
+    text-align: center;
+}
+
+/* Responsive untuk single stream view */
+@media (max-width: 1200px) {
+    #video-grid.single-stream-view .video-player-container,
+    #video-grid.single-stream-view .stream-indicator {
+        max-width: 900px;
+    }
+}
+
+@media (max-width: 768px) {
+    #video-grid.single-stream-view .video-player-container,
+    #video-grid.single-stream-view .stream-indicator {
+        max-width: 100%;
+    }
+    
+    .indicator-btn {
+        width: 35px;
+        height: 35px;
+        font-size: 14px;
+    }
+    
+    .indicator-text {
+        font-size: 12px;
+        min-width: 100px;
+    }
+}
+
 #video-grid.layout-1 {
     grid-template-columns: 1fr;
 }
