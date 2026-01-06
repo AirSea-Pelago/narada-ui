@@ -1052,15 +1052,6 @@ class StreamManager {
   getDefaultStreams() {
     return [
       {
-        id: "2",
-        name: "narada",
-        displayName: "narada Live (WebRTC)",
-        type: "webrtc",
-        url: "http://localhost:8889/live",
-        enabled: true,
-        position: 1,
-      },
-      {
         id: "1",
         name: "ai_view",
         displayName: "Drone Live (WebRTC)",
