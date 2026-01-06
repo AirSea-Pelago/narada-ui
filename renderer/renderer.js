@@ -95,7 +95,7 @@ function updateMediaMTXUI(status) {
 async function loadAssets() {
   try {
     // Load logo image
-    const logoPath = await window.electronAPI.getAssetPath("narada.jpeg");
+    const logoPath = await window.electronAPI.getAssetPath("narada.png");
     const logoImg = document.getElementById("logo-img");
     const logoIcon = document.getElementById("logo-icon");
 
