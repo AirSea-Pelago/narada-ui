@@ -92,6 +92,47 @@ function updateMediaMTXUI(status) {
   }
 }
 
+async function loadAssets() {
+  try {
+    // Load logo image
+    const logoPath = await window.electronAPI.getAssetPath("narada.jpeg");
+    const logoImg = document.getElementById("logo-img");
+    const logoIcon = document.getElementById("logo-icon");
+
+    if (logoImg && logoPath) {
+      // Check if file exists by trying to load it
+      const img = new Image();
+      img.onload = () => {
+        logoImg.src = `file://${logoPath}`;
+        logoImg.style.display = "inline";
+        if (logoIcon) logoIcon.style.display = "none";
+      };
+      img.onerror = () => {
+        console.warn("[Renderer] Logo image not found, using icon");
+        if (logoImg) logoImg.style.display = "none";
+        if (logoIcon) logoIcon.style.display = "inline";
+      };
+      img.src = `file://${logoPath}`;
+    }
+  } catch (error) {
+    console.error("[Renderer] Error loading assets:", error);
+    // Fallback to icon if image fails
+    const logoImg = document.getElementById("logo-img");
+    const logoIcon = document.getElementById("logo-icon");
+    if (logoImg) logoImg.style.display = "none";
+    if (logoIcon) logoIcon.style.display = "inline";
+  }
+}
+
+// Call loadAssets when DOM is ready
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => {
+    loadAssets();
+  });
+} else {
+  loadAssets();
+}
+
 // Setup event listeners
 function setupEventListeners() {
   console.log("[Renderer] Setting up event listeners");

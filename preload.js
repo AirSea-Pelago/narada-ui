@@ -5,9 +5,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   checkLicense: () => ipcRenderer.invoke("check-license"),
 
   // MediaMTX control
-  // controlMediaMTX: (action) => ipcRenderer.invoke("control-mediamtx", action),
-  // getMediaMTXStatus: () => ipcRenderer.invoke("control-mediamtx", "status"),
-
   controlMediaMTX: (action) => ipcRenderer.invoke("control-mediamtx", action),
   getMediaMTXStatus: () => ipcRenderer.invoke("control-mediamtx", "status"),
 
@@ -21,6 +18,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // System info
   getSystemInfo: () => ipcRenderer.invoke("get-system-info"),
+
+  // Asset path resolver
+  getAssetPath: (assetName) => ipcRenderer.invoke("get-asset-path", assetName),
 
   // Event listeners
   onLicenseStatus: (callback) => {

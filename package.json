@@ -1,5 +1,5 @@
 {
-  "name": "securestream-pro",
+  "name": "airsea_drone_narada",
   "version": "2.0.0",
   "description": "Secure Video Streaming Platform with License Protection",
   "main": "main.js",
@@ -11,8 +11,8 @@
     "postinstall": "electron-builder install-app-deps"
   },
   "build": {
-    "appId": "com.yourcompany.securestream",
-    "productName": "SecureStream Pro",
+    "appId": "com.airsea.narada",
+    "productName": "AirSea Drone Narada",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -53,7 +53,7 @@
           ]
         }
       ],
-      "icon": "assets/icon.ico",
+      "icon": "assets/narada.ico",
       "artifactName": "${productName}-${version}-${arch}.${ext}",
       "publisherName": "Your Company"
     },
@@ -63,7 +63,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "SecureStream Pro",
+      "shortcutName": "AirSea Drone Narada",
       "uninstallDisplayName": "${productName}",
       "license": "license.txt"
     },
@@ -78,7 +78,7 @@
     "mediamtx",
     "license"
   ],
-  "author": "Your Company",
+  "author": "am",
   "license": "ISC",
   "devDependencies": {
     "electron": "^29.0.0",

@@ -9,20 +9,44 @@ let licenseCheckInterval;
 let mediamtxProcess = null;
 let currentLicense = null;
 
+// Get correct paths for both dev and production
+function getAppPaths() {
+  const isDev = !app.isPackaged;
+
+  if (isDev) {
+    // Development mode
+    return {
+      root: __dirname,
+      assets: path.join(__dirname, "assets"),
+      renderer: path.join(__dirname, "renderer"),
+      python: "python",
+      licenseChecker: path.join(__dirname, "license-checker.py"),
+      mediamtxDir: path.join(__dirname, "mediamtx"),
+    };
+  } else {
+    // Production mode (after build)
+    return {
+      root: process.resourcesPath,
+      assets: path.join(process.resourcesPath, "assets"),
+      renderer: path.join(process.resourcesPath, "app.asar", "renderer"),
+      python: "python", // System Python
+      licenseChecker: path.join(process.resourcesPath, "license-checker.py"),
+      mediamtxDir: path.join(process.resourcesPath, "mediamtx"),
+    };
+  }
+}
+
 // Get MediaMTX path based on platform
 function getMediaMTXPath() {
-  const appPath = app.isPackaged ? process.resourcesPath : __dirname;
+  const paths = getAppPaths();
+  const mediamtxDir = paths.mediamtxDir;
 
-  let mediamtxDir, mediamtxExe;
-
+  let mediamtxExe;
   if (process.platform === "win32") {
-    mediamtxDir = path.join(appPath, "mediamtx");
     mediamtxExe = path.join(mediamtxDir, "mediamtx.exe");
   } else if (process.platform === "darwin") {
-    mediamtxDir = path.join(appPath, "mediamtx");
     mediamtxExe = path.join(mediamtxDir, "mediamtx");
   } else {
-    mediamtxDir = path.join(appPath, "mediamtx");
     mediamtxExe = path.join(mediamtxDir, "mediamtx");
   }
 
@@ -30,6 +54,8 @@ function getMediaMTXPath() {
 }
 
 function createWindow() {
+  const paths = getAppPaths();
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -43,11 +69,21 @@ function createWindow() {
     resizable: true,
     backgroundColor: "#0f172a",
     show: false,
-    icon: path.join(__dirname, "assets/icon.ico"),
+    icon: path.join(paths.assets, "icon.ico"),
   });
 
-  mainWindow.loadFile("renderer/index.html");
-  mainWindow.webContents.openDevTools();
+  // Load index.html
+  const indexPath = app.isPackaged
+    ? path.join(process.resourcesPath, "app.asar", "renderer", "index.html")
+    : path.join(__dirname, "renderer", "index.html");
+
+  console.log("[Main] Loading index from:", indexPath);
+  mainWindow.loadFile(indexPath);
+
+  // Open DevTools hanya di development
+  if (!app.isPackaged) {
+    mainWindow.webContents.openDevTools();
+  }
 
   mainWindow.once("ready-to-show", () => {
     console.log("[Main] Window ready to show");
@@ -58,11 +94,11 @@ function createWindow() {
       setTimeout(() => {
         checkLicenseAndStartMediaMTX();
       }, 500);
-    });
 
-    licenseCheckInterval = setInterval(() => {
-      checkLicense();
-    }, 180000);
+      licenseCheckInterval = setInterval(() => {
+        checkLicense();
+      }, 180000);
+    });
   });
 
   createMenu();
@@ -205,10 +241,14 @@ function createMenu() {
 
 async function checkLicenseAndStartMediaMTX() {
   console.log("[Main] Starting license check...");
-  const pythonScript = path.join(__dirname, "license-checker.py");
+  const paths = getAppPaths();
+  const pythonScript = paths.licenseChecker;
+
+  console.log("[Main] Python script path:", pythonScript);
+  console.log("[Main] Script exists:", fs.existsSync(pythonScript));
 
   try {
-    const python = spawn("python", [pythonScript]);
+    const python = spawn(paths.python, [pythonScript]);
 
     let dataString = "";
     let errorString = "";
@@ -242,7 +282,6 @@ async function checkLicenseAndStartMediaMTX() {
         }
 
         if (result.valid) {
-          // Lisensi valid, start MediaMTX dari aplikasi
           startMediaMTX();
 
           setTimeout(() => {
@@ -292,6 +331,10 @@ function startMediaMTX() {
   const { mediamtxDir, mediamtxExe } = getMediaMTXPath();
   const configPath = path.join(mediamtxDir, "mediamtx.yml");
 
+  console.log("[Main] MediaMTX exe:", mediamtxExe);
+  console.log("[Main] MediaMTX config:", configPath);
+  console.log("[Main] MediaMTX dir:", mediamtxDir);
+
   // Check if MediaMTX exists
   if (!fs.existsSync(mediamtxExe)) {
     console.error(`[Main] MediaMTX not found at: ${mediamtxExe}`);
@@ -304,8 +347,12 @@ paths:
     source: publisher
     sourceOnDemand: yes`;
 
-      fs.writeFileSync(configPath, defaultConfig);
-      console.log(`[Main] Created default config at: ${configPath}`);
+      try {
+        fs.writeFileSync(configPath, defaultConfig);
+        console.log(`[Main] Created default config at: ${configPath}`);
+      } catch (err) {
+        console.error("[Main] Failed to create config:", err);
+      }
     }
 
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -382,9 +429,10 @@ paths:
 
 function checkLicense() {
   console.log("[Main] Manual license check...");
-  const pythonScript = path.join(__dirname, "license-checker.py");
+  const paths = getAppPaths();
+  const pythonScript = paths.licenseChecker;
 
-  const python = spawn("python", [pythonScript]);
+  const python = spawn(paths.python, [pythonScript]);
 
   let dataString = "";
 
@@ -411,7 +459,6 @@ function checkLicense() {
         if (result.valid) {
           currentLicense = result;
 
-          // Jika lisensi valid dan MediaMTX belum jalan, start
           if (!mediamtxProcess) {
             startMediaMTX();
           }
@@ -508,7 +555,11 @@ function showMediaMTXLogs() {
     },
   });
 
-  logWindow.loadFile("renderer/logs.html");
+  const logsPath = app.isPackaged
+    ? path.join(process.resourcesPath, "app.asar", "renderer", "logs.html")
+    : path.join(__dirname, "renderer", "logs.html");
+
+  logWindow.loadFile(logsPath);
 }
 
 function showAboutDialog() {
@@ -516,20 +567,18 @@ function showAboutDialog() {
     type: "info",
     title: "About SecureStream Pro",
     message:
-      "SecureStream Pro\nVersion 2.0.0\n\nVideo Streaming Platform with Hardware License Protection\n\n© 2024 Your Company",
+      "SecureStream Pro\nVersion 2.1.0\n\nVideo Streaming Platform with Hardware License Protection\n\n© 2024 AirSea Drone Narada",
     buttons: ["OK"],
   });
 }
 
-// ==========================================
-// IPC Handlers - TAMBAHKAN INI
-// ==========================================
-
+// IPC Handlers
 ipcMain.handle("check-license", async () => {
   console.log("[Main] IPC: check-license called");
   return new Promise((resolve) => {
-    const pythonScript = path.join(__dirname, "license-checker.py");
-    const python = spawn("python", [pythonScript]);
+    const paths = getAppPaths();
+    const pythonScript = paths.licenseChecker;
+    const python = spawn(paths.python, [pythonScript]);
 
     let dataString = "";
 
@@ -665,8 +714,16 @@ ipcMain.handle("get-system-info", async () => {
   };
 });
 
+// Protocol handler untuk custom protocol (optional)
+ipcMain.handle("get-asset-path", async (event, assetName) => {
+  const paths = getAppPaths();
+  return path.join(paths.assets, assetName);
+});
+
 app.whenReady().then(() => {
   console.log("[Main] App ready, creating window...");
+  console.log("[Main] App packaged:", app.isPackaged);
+  console.log("[Main] Resources path:", process.resourcesPath);
   createWindow();
 });
 
