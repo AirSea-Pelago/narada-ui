@@ -1067,7 +1067,7 @@ class StreamManager {
         type: "webrtc",
         url: "http://localhost:8889/drone",
         enabled: true,
-        position: 1,
+        position: 2,
       },
     ];
   }
