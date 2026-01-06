@@ -2,9 +2,10 @@
 // HLS.js loaded from CDN in index.html
 
 class VideoStreamPlayer {
-  constructor(containerId, streamConfig) {
+  constructor(containerId, streamConfig, streamManager) {
     this.containerId = containerId;
     this.container = document.getElementById(containerId);
+    this.streamManager = streamManager;
 
     if (!this.container) {
       console.error(`Container not found: ${containerId}`);
@@ -65,20 +66,20 @@ class VideoStreamPlayer {
           
           <div class="video-controls">
             <div class="controls-left">
-              <button class="control-btn play-pause-btn" title="Play/Pause">
-                <i class="fas fa-play"></i>
-              </button>
-              <button class="control-btn volume-btn" title="Mute/Unmute">
-                <i class="fas fa-volume-up"></i>
-              </button>
-              <div class="volume-slider-container">
-                <input type="range" class="volume-slider" min="0" max="100" value="100">
-              </div>
-              <div class="time-display">
-                <span class="current-time">00:00</span> / 
-                <span class="duration">LIVE</span>
-              </div>
-            </div>
+  <button class="control-btn prev-stream-btn" title="Previous Stream">
+    <i class="fas fa-step-backward"></i>
+  </button>
+  <button class="control-btn play-pause-btn" title="Play/Pause">
+    <i class="fas fa-play"></i>
+  </button>
+  <button class="control-btn next-stream-btn" title="Next Stream">
+    <i class="fas fa-step-forward"></i>
+  </button>
+  <button class="control-btn volume-btn" title="Mute/Unmute">
+    <i class="fas fa-volume-up"></i>
+  </button>
+  ...
+</div>
             
             <div class="controls-right">
               <button class="control-btn snapshot-btn" title="Take Snapshot">
@@ -149,6 +150,21 @@ class VideoStreamPlayer {
     this.loadingSpinner = this.container.querySelector(".loading-spinner");
     this.statusIndicator = this.container.querySelector(".status-indicator");
     this.statusText = this.container.querySelector(".status-text");
+    // Next/Previous Stream buttons
+    const nextStreamBtn = this.container.querySelector(".next-stream-btn");
+    const prevStreamBtn = this.container.querySelector(".prev-stream-btn");
+
+    if (nextStreamBtn) {
+      nextStreamBtn.addEventListener("click", () => {
+        this.switchToNextStream();
+      });
+    }
+
+    if (prevStreamBtn) {
+      prevStreamBtn.addEventListener("click", () => {
+        this.switchToPreviousStream();
+      });
+    }
 
     this.setupEventListeners();
     this.startStream();
@@ -269,6 +285,110 @@ class VideoStreamPlayer {
       this.videoElement.addEventListener("volumechange", () => {
         this.updateVolumeDisplay();
       });
+    }
+  }
+  // New methods for stream switching
+  switchToNextStream() {
+    if (!this.streamManager) {
+      console.warn("StreamManager not available");
+      return;
+    }
+
+    const allStreams = this.streamManager.getAllStreams();
+    if (allStreams.length <= 1) {
+      this.showNotification("No other streams available");
+      return;
+    }
+
+    const currentIndex = allStreams.findIndex(
+      (s) => s.id === this.streamConfig.id
+    );
+    const nextIndex = (currentIndex + 1) % allStreams.length;
+    const nextStream = allStreams[nextIndex];
+
+    this.showNotification(
+      `Switching to: ${nextStream.displayName || nextStream.name}`
+    );
+    this.switchStream(nextStream);
+  }
+
+  switchToPreviousStream() {
+    if (!this.streamManager) {
+      console.warn("StreamManager not available");
+      return;
+    }
+
+    const allStreams = this.streamManager.getAllStreams();
+    if (allStreams.length <= 1) {
+      this.showNotification("No other streams available");
+      return;
+    }
+
+    const currentIndex = allStreams.findIndex(
+      (s) => s.id === this.streamConfig.id
+    );
+    const prevIndex =
+      currentIndex - 1 < 0 ? allStreams.length - 1 : currentIndex - 1;
+    const prevStream = allStreams[prevIndex];
+
+    this.showNotification(
+      `Switching to: ${prevStream.displayName || prevStream.name}`
+    );
+    this.switchStream(prevStream);
+  }
+
+  async switchStream(newStreamConfig) {
+    const wasPlaying = this.isPlaying;
+    const currentVolume = this.volume;
+    const wasMuted = this.isMuted;
+
+    this.cleanupStream();
+    this.streamConfig = newStreamConfig;
+
+    // Update UI
+    const titleEl = this.container.querySelector(".video-title");
+    if (titleEl)
+      titleEl.textContent = newStreamConfig.displayName || newStreamConfig.name;
+
+    const streamTypeEl = this.container.querySelector(".stream-type");
+    if (streamTypeEl) {
+      streamTypeEl.textContent = newStreamConfig.type.toUpperCase();
+      streamTypeEl.className = `stream-type ${newStreamConfig.type}`;
+    }
+
+    const streamUrlEl = this.container.querySelector(".stream-url");
+    if (streamUrlEl) {
+      streamUrlEl.textContent = newStreamConfig.url;
+      streamUrlEl.title = newStreamConfig.url;
+    }
+
+    const protocolEl = this.container.querySelector(".stat-protocol");
+    if (protocolEl) protocolEl.textContent = newStreamConfig.type.toUpperCase();
+
+    await this.startStream();
+
+    if (this.videoElement) {
+      this.setVolume(currentVolume);
+      this.videoElement.muted = wasMuted;
+      if (wasPlaying) this.play();
+    }
+  }
+
+  cleanupStream() {
+    if (this.isRecording) this.stopRecording();
+    if (this.hls) {
+      this.hls.destroy();
+      this.hls = null;
+    }
+    if (this.peerConnection) {
+      this.peerConnection.close();
+      this.peerConnection = null;
+    }
+    if (this.videoElement) {
+      this.videoElement.pause();
+      this.videoElement.src = "";
+      this.videoElement.srcObject = null;
+      this.videoElement.load();
     }
   }
 
@@ -1029,7 +1149,7 @@ class StreamManager {
       this.players.get(containerId).destroy();
     }
 
-    const player = new VideoStreamPlayer(containerId, stream);
+    const player = new VideoStreamPlayer(containerId, stream, this); // Pass 'this'
     this.players.set(containerId, player);
     return player;
   }
