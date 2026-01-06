@@ -933,15 +933,6 @@ class StreamManager {
     return [
       {
         id: "1",
-        name: "drone",
-        displayName: "Drone Live (HLS)",
-        type: "hls",
-        url: "http://localhost:8888/drone/index.m3u8",
-        enabled: true,
-        position: 0,
-      },
-      {
-        id: "2",
         name: "drone_webrtc",
         displayName: "Drone Live (WebRTC)",
         type: "webrtc",
