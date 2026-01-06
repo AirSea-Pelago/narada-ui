@@ -1053,6 +1053,15 @@ class StreamManager {
     return [
       {
         id: "1",
+        name: "ai_view",
+        displayName: "Drone Live (WebRTC)",
+        type: "webrtc",
+        url: "http://localhost:8889/live",
+        enabled: true,
+        position: 1,
+      },
+      {
+        id: "2",
         name: "drone_webrtc",
         displayName: "Drone Live (WebRTC)",
         type: "webrtc",
