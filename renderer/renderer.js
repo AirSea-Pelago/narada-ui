@@ -1,4 +1,4 @@
-// Main Renderer Process - Single Stream View with Navigation
+// Main Renderer Process - Simple 2-Stream Navigation
 let streamManager;
 let currentLicense;
 let videoGrid;
@@ -360,12 +360,15 @@ async function loadStreams() {
 function addStreamIndicator(currentIndex, totalStreams) {
   if (!videoGrid) return;
 
+  const canGoPrev = currentIndex > 0;
+  const canGoNext = currentIndex < totalStreams - 1;
+
   const indicator = document.createElement("div");
   indicator.className = "stream-indicator";
   indicator.innerHTML = `
     <div class="indicator-content">
       <button class="indicator-btn prev-btn" onclick="window.switchToPreviousStream()" ${
-        totalStreams <= 1 ? "disabled" : ""
+        !canGoPrev ? "disabled" : ""
       }>
         <i class="fas fa-chevron-left"></i>
       </button>
@@ -373,7 +376,7 @@ function addStreamIndicator(currentIndex, totalStreams) {
         Stream ${currentIndex + 1} of ${totalStreams}
       </span>
       <button class="indicator-btn next-btn" onclick="window.switchToNextStream()" ${
-        totalStreams <= 1 ? "disabled" : ""
+        !canGoNext ? "disabled" : ""
       }>
         <i class="fas fa-chevron-right"></i>
       </button>
@@ -383,14 +386,19 @@ function addStreamIndicator(currentIndex, totalStreams) {
   videoGrid.appendChild(indicator);
 }
 
-// Function untuk switch ke stream berikutnya
+// Function untuk switch ke stream berikutnya - FIXED
 window.switchToNextStream = function () {
   if (!streamManager) return;
 
   const streams = streamManager.getAllStreams();
-  if (streams.length <= 1) return;
 
-  currentStreamIndex = (currentStreamIndex + 1) % streams.length;
+  // Cek apakah sudah di stream terakhir
+  if (currentStreamIndex >= streams.length - 1) {
+    console.log("[Renderer] Already at last stream");
+    return;
+  }
+
+  currentStreamIndex++;
   console.log(
     `[Renderer] Switching to next stream: index ${currentStreamIndex}`
   );
@@ -402,15 +410,19 @@ window.switchToNextStream = function () {
   loadStreams();
 };
 
-// Function untuk switch ke stream sebelumnya
+// Function untuk switch ke stream sebelumnya - FIXED
 window.switchToPreviousStream = function () {
   if (!streamManager) return;
 
   const streams = streamManager.getAllStreams();
-  if (streams.length <= 1) return;
 
-  currentStreamIndex =
-    currentStreamIndex - 1 < 0 ? streams.length - 1 : currentStreamIndex - 1;
+  // Cek apakah sudah di stream pertama
+  if (currentStreamIndex <= 0) {
+    console.log("[Renderer] Already at first stream");
+    return;
+  }
+
+  currentStreamIndex--;
   console.log(
     `[Renderer] Switching to previous stream: index ${currentStreamIndex}`
   );
@@ -766,5 +778,5 @@ if (document.readyState === "loading") {
   }, 500);
 }
 
-console.log("[Renderer] Renderer.js loaded - Single Stream View Mode");
+console.log("[Renderer] Renderer.js loaded - Simple 2-Stream Navigation Mode");
 console.log("[Renderer] electronAPI available:", !!window.electronAPI);
