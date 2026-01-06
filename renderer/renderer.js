@@ -336,11 +336,11 @@ async function loadStreams() {
   // Clear video grid
   if (videoGrid) {
     videoGrid.innerHTML = "";
-    videoGrid.className = `video-grid layout-${Math.min(streams.length, 16)}`;
+    videoGrid.className = `video-grid`;
   }
 
   // Create players
-  for (let i = 0; i < streams.length; i++) {
+  for (let i = 0; i < 1; i++) {
     const stream = streams[i];
     const playerId = `video-player-${stream.id}`;
     const playerContainer = document.createElement("div");
