@@ -3,28 +3,32 @@
   "version": "2.0.0",
   "description": "Secure Video Streaming Platform with License Protection",
   "main": "main.js",
-  "scripts": {
+  "scripts":  {
     "start": "electron .",
     "build": "electron-builder",
     "build:win": "electron-builder --win",
     "pack": "electron-builder --dir",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "electron-builder install-app-deps",
+    "setup-python": "powershell -ExecutionPolicy Bypass -File scripts/setup-python. ps1"
   },
   "build": {
     "appId": "com.airsea.narada",
     "productName": "AirSea Drone Narada",
     "directories": {
-      "output": "dist",
+      "output":  "dist",
       "buildResources": "build"
     },
     "files": [
       "**/*",
-      "!node_modules",
-      "!dist",
+      "! node_modules",
+      "! dist",
       "!build",
       "!src",
       "!.gitignore",
-      "!*.md"
+      "!*.md",
+      "!python/**",
+      "!crowd_counter/**",
+      "! scripts/**"
     ],
     "extraResources": [
       {
@@ -41,8 +45,32 @@
           "**/*"
         ]
       },
+      {
+        "from": "python/",
+        "to": "python/",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "crowd_counter/",
+        "to":  "crowd_counter/",
+        "filter": [
+          "**/*",
+          "!venv/**",
+          "!__pycache__/**",
+          "!*. pyc",
+          "!*. pyo",
+          "!. git/**"
+        ]
+      },
       "license-checker.py",
       "generate-license.py"
+    ],
+    "asarUnpack": [
+      "python/**/*",
+      "crowd_counter/**/*",
+      "mediamtx/**/*"
     ],
     "win": {
       "target": [
@@ -54,7 +82,7 @@
         }
       ],
       "icon": "build/icon.ico",
-      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "artifactName":  "${productName}-${version}-${arch}.${ext}",
       "publisherName": "Your Company"
     },
     "nsis": {
@@ -62,10 +90,10 @@
       "perMachine": true,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
+      "createStartMenuShortcut":  true,
       "shortcutName": "AirSea Drone Narada",
       "uninstallDisplayName": "${productName}",
-      "license": "license.txt"
+      "license":  "license.txt"
     },
     "publish": null
   },
@@ -76,16 +104,18 @@
     "rtsp",
     "rtmp",
     "mediamtx",
-    "license"
+    "license",
+    "crowd-counting",
+    "ai"
   ],
-  "author": "am",
-  "license": "ISC",
+  "author":  "am",
+  "license":  "ISC",
   "devDependencies": {
     "electron": "^29.0.0",
     "electron-builder": "^24.9.0"
   },
   "dependencies": {
-    "hls.js": "^1.6.15",
+    "hls. js": "^1.6.15",
     "video.js": "^8.23.4",
     "videojs-contrib-hls": "^5.15.0"
   }

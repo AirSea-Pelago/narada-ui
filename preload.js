@@ -44,4 +44,30 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onStopAllStreams: (callback) => {
     ipcRenderer.on("stop-all-streams", () => callback());
   },
+
+    // =============================================================================
+  // CROWD COUNTER APIs (NEW)
+  // =============================================================================
+
+  // Crowd Counter Control
+  startCrowdCounter:  (config) => ipcRenderer.invoke("start-crowd-counter", config),
+  stopCrowdCounter: () => ipcRenderer.invoke("stop-crowd-counter"),
+  getCrowdCounterStatus: () => ipcRenderer.invoke("get-crowd-counter-status"),
+
+  // Preset Management
+  getBuiltinPresets: () => ipcRenderer.invoke("get-builtin-presets"),
+  loadUserPresets: () => ipcRenderer.invoke("load-user-presets"),
+  saveUserPreset: (preset) => ipcRenderer.invoke("save-user-preset", preset),
+  deleteUserPreset: (presetId) => ipcRenderer.invoke("delete-user-preset", presetId),
+  getLastUsedPreset: () => ipcRenderer.invoke("get-last-used-preset"),
+  setLastUsedPreset: (presetId) => ipcRenderer.invoke("set-last-used-preset", presetId),
+
+  // Crowd Counter Event Listeners
+  onCrowdCounterStatus: (callback) => {
+    ipcRenderer.on("crowd-counter-status", (event, status) => callback(status));
+  },
+  onCrowdCounterStats:  (callback) => {
+    ipcRenderer.on("crowd-counter-stats", (event, stats) => callback(stats));
+  },
+  
 });
