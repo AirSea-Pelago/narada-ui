@@ -18,6 +18,51 @@ let crowdCounterProcess = null;
 let currentCrowdCounterConfig = null;
 
 // =============================================================================
+// PYTHON RESOLVER
+// =============================================================================
+
+/**
+ * Find a working Python executable on this machine.
+ * Tries: bundled python.exe → "python" → "python3" → "py" (Windows launcher).
+ * Returns a Promise that resolves to the executable string, or rejects if none found.
+ */
+function resolvePython(bundledPath) {
+  const candidates = [];
+  if (bundledPath && bundledPath !== "python") candidates.push(bundledPath);
+  candidates.push("python", "python3", "py");
+
+  return new Promise((resolve, reject) => {
+    let index = 0;
+
+    function tryNext() {
+      if (index >= candidates.length) {
+        reject(new Error(
+          "Python not found. Tried: " + candidates.join(", ") +
+          ". Please install Python and ensure it is on your PATH."
+        ));
+        return;
+      }
+
+      const candidate = candidates[index++];
+      const probe = spawn(candidate, ["--version"], { windowsHide: true });
+
+      probe.on("close", (code) => {
+        if (code === 0 || code === null) {
+          console.log(`[Main] Python resolved: ${candidate}`);
+          resolve(candidate);
+        } else {
+          tryNext();
+        }
+      });
+
+      probe.on("error", () => tryNext());
+    }
+
+    tryNext();
+  });
+}
+
+// =============================================================================
 // PATH HELPERS
 // =============================================================================
 
@@ -683,8 +728,8 @@ function checkLicenseAndStartMediaMTX() {
   console.log("[Main] Python script path:", pythonScript);
   console.log("[Main] Script exists:", fs.existsSync(pythonScript));
 
-  try {
-    const python = spawn(paths.python, [pythonScript]);
+  resolvePython(paths.python).then((pythonExe) => {
+    const python = spawn(pythonExe, [pythonScript], { windowsHide: true });
 
     let dataString = "";
     let errorString = "";
@@ -700,15 +745,25 @@ function checkLicenseAndStartMediaMTX() {
     });
 
     python.on("close", (code) => {
-      console. log(`[Main] Python process closed with code ${code}`);
+      console.log(`[Main] Python process closed with code ${code}`);
+
+      const trimmed = dataString.trim();
+      if (!trimmed) {
+        console.error("[Main] Python produced no output (stderr:", errorString.trim(), ")");
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("license-status", {
+            valid: false,
+            message: "License check failed: Python script produced no output. " +
+                     (errorString.trim() || `Exit code ${code}`),
+          });
+        }
+        return;
+      }
 
       try {
-        const jsonStart = dataString.indexOf("{");
-        if (jsonStart > 0) {
-          dataString = dataString.substring(jsonStart);
-        }
-
-        const result = JSON.parse(dataString. trim());
+        const jsonStart = trimmed.indexOf("{");
+        const jsonString = jsonStart > 0 ? trimmed.substring(jsonStart) : trimmed;
+        const result = JSON.parse(jsonString);
         currentLicense = result;
 
         console.log("[Main] License check result:", result);
@@ -735,7 +790,7 @@ function checkLicenseAndStartMediaMTX() {
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send("license-status", {
             valid: false,
-            message: "Error checking license:  " + error.message,
+            message: "Error parsing license response: " + error.message,
           });
         }
       }
@@ -750,15 +805,16 @@ function checkLicenseAndStartMediaMTX() {
         });
       }
     });
-  } catch (error) {
-    console.error("[Main] Failed to start license check:", error);
+
+  }).catch((error) => {
+    console.error("[Main] Could not resolve Python:", error.message);
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send("license-status", {
         valid: false,
-        message: "Failed to start license check: " + error.message,
+        message: error.message,
       });
     }
-  }
+  });
 }
 
 function checkLicense() {
@@ -766,46 +822,65 @@ function checkLicense() {
   const paths = getAppPaths();
   const pythonScript = paths.licenseChecker;
 
-  const python = spawn(paths.python, [pythonScript]);
+  resolvePython(paths.python).then((pythonExe) => {
+    const python = spawn(pythonExe, [pythonScript], { windowsHide: true });
 
-  let dataString = "";
+    let dataString = "";
 
-  python.stdout.on("data", (data) => {
-    dataString += data.toString();
-  });
+    python.stdout.on("data", (data) => {
+      dataString += data.toString();
+    });
 
-  python.stderr.on("data", (data) => {
-    console.error(`[Main] Python Error: ${data}`);
-  });
+    python.stderr.on("data", (data) => {
+      console.error(`[Main] Python Error: ${data}`);
+    });
 
-  python.on("close", () => {
-    try {
-      const jsonStart = dataString.indexOf("{");
-      if (jsonStart > 0) {
-        dataString = dataString. substring(jsonStart);
+    python.on("close", (code) => {
+      const trimmed = dataString.trim();
+      if (!trimmed) {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("license-status", {
+            valid: false,
+            message: `License check failed: no output from Python (exit ${code})`,
+          });
+        }
+        return;
       }
 
-      const result = JSON.parse(dataString.trim());
+      try {
+        const jsonStart = trimmed.indexOf("{");
+        const jsonString = jsonStart > 0 ? trimmed.substring(jsonStart) : trimmed;
+        const result = JSON.parse(jsonString);
 
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send("license-status", result);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("license-status", result);
 
-        if (result.valid) {
-          currentLicense = result;
+          if (result.valid) {
+            currentLicense = result;
 
-          if (! mediamtxProcess) {
-            startMediaMTX();
+            if (!mediamtxProcess) {
+              startMediaMTX();
+            }
           }
         }
+      } catch (error) {
+        console.error("[Main] Error parsing license result:", error);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("license-status", {
+            valid: false,
+            message: "Error parsing license response: " + error.message,
+          });
+        }
       }
-    } catch (error) {
-      console.error("[Main] Error parsing license result:", error);
-      if (mainWindow && !mainWindow. isDestroyed()) {
-        mainWindow.webContents.send("license-status", {
-          valid: false,
-          message:  "Error checking license: " + error.message,
-        });
-      }
+    });
+
+  }).catch((error) => {
+    console.error("[Main] Could not resolve Python:", error.message);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("license-status", {
+        valid: false,
+        message: error.message,
+      });
     }
   });
 }
@@ -1111,10 +1186,19 @@ ipcMain.handle("set-last-used-preset", async (event, presetId) => {
 
 ipcMain.handle("check-license", async () => {
   console.log("[Main] IPC:  check-license called");
+  const paths = getAppPaths();
+  const pythonScript = paths.licenseChecker;
+
+  let pythonExe;
+  try {
+    pythonExe = await resolvePython(paths.python);
+  } catch (err) {
+    console.error("[Main] IPC: Could not resolve Python:", err.message);
+    return { valid: false, message: err.message };
+  }
+
   return new Promise((resolve) => {
-    const paths = getAppPaths();
-    const pythonScript = paths.licenseChecker;
-    const python = spawn(paths. python, [pythonScript]);
+    const python = spawn(pythonExe, [pythonScript], { windowsHide: true });
 
     let dataString = "";
 
@@ -1122,21 +1206,28 @@ ipcMain.handle("check-license", async () => {
       dataString += data.toString();
     });
 
-    python.on("close", () => {
-      try {
-        const jsonStart = dataString.indexOf("{");
-        if (jsonStart > 0) {
-          dataString = dataString. substring(jsonStart);
-        }
+    python.on("close", (code) => {
+      const trimmed = dataString.trim();
+      if (!trimmed) {
+        console.error(`[Main] IPC: Python produced no output (exit ${code})`);
+        resolve({
+          valid: false,
+          message: `License check failed: Python script produced no output (exit ${code})`,
+        });
+        return;
+      }
 
-        const result = JSON.parse(dataString.trim());
+      try {
+        const jsonStart = trimmed.indexOf("{");
+        const jsonString = jsonStart > 0 ? trimmed.substring(jsonStart) : trimmed;
+        const result = JSON.parse(jsonString);
         console.log("[Main] IPC: License check result:", result);
         resolve(result);
       } catch (error) {
         console.error("[Main] IPC:  Error parsing result:", error);
         resolve({
           valid: false,
-          message: "Error checking license: " + error.message,
+          message: "Error parsing license response: " + error.message,
         });
       }
     });
