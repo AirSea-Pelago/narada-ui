@@ -23,6 +23,16 @@ class VideoStreamPlayer {
     this.isRecording = false;
     this.mediaRecorder = null;
     this.recordedChunks = [];
+    this.manualMode = false;
+    this.manualPoints = [];
+    this.manualCanvas = null;
+    this.zoneOverlay = null;
+    this.zoneDrag = null;
+    this.hasVideoFrame = false;
+    this.boundZoneMove = (e) => this.moveZoneDrag(e);
+    this.boundZoneEnd = () => this.endZoneDrag();
+    this.boundResize = () => this.updateInteractiveLayers();
+    this.resizeObserver = null;
 
     this.stats = {
       bitrate: 0,
@@ -53,6 +63,34 @@ class VideoStreamPlayer {
         <div class="video-container">
           <video id="video-${this.containerId}" class="video-element" 
                  playsinline webkit-playsinline muted></video>
+          <div class="zone-edit-overlay">
+            <div class="zone-box">
+              <span class="zone-label">COUNTING ZONE</span>
+              <span class="zone-handle zone-handle-nw" data-handle="nw"></span>
+              <span class="zone-handle zone-handle-ne" data-handle="ne"></span>
+              <span class="zone-handle zone-handle-sw" data-handle="sw"></span>
+              <span class="zone-handle zone-handle-se" data-handle="se"></span>
+            </div>
+          </div>
+          <canvas class="manual-count-canvas" title="Left click to add, right click or Shift+click to remove"></canvas>
+          <div class="video-ai-stats-overlay">
+            <div class="video-ai-stat">
+              <span>Count</span>
+              <strong class="stat-ai-count">0</strong>
+            </div>
+            <div class="video-ai-stat">
+              <span>FPS</span>
+              <strong class="stat-ai-fps">0.0</strong>
+            </div>
+            <div class="video-ai-stat">
+              <span>Mode</span>
+              <strong class="stat-ai-mode">DET</strong>
+            </div>
+            <div class="video-ai-stat">
+              <span>Zone</span>
+              <strong class="stat-ai-zone">Off</strong>
+            </div>
+          </div>
           
           <div class="video-overlay">
             <button class="overlay-btn play-btn" title="Play/Pause">
@@ -78,12 +116,20 @@ class VideoStreamPlayer {
   <button class="control-btn volume-btn" title="Mute/Unmute">
     <i class="fas fa-volume-up"></i>
   </button>
-  ...
+  <div class="volume-slider-container">
+    <input type="range" class="volume-slider" min="0" max="100" value="100">
+  </div>
 </div>
             
             <div class="controls-right">
               <button class="control-btn snapshot-btn" title="Take Snapshot">
                 <i class="fas fa-camera"></i>
+              </button>
+              <button class="control-btn manual-count-btn" title="Manual Count Dots">
+                <i class="fas fa-location-dot"></i>
+              </button>
+              <button class="control-btn zone-edit-btn" title="Edit Counting Zone">
+                <i class="fas fa-vector-square"></i>
               </button>
               <button class="control-btn record-btn" title="Start Recording">
                 <i class="fas fa-circle"></i>
@@ -99,6 +145,22 @@ class VideoStreamPlayer {
         </div>
         
         <div class="video-stats">
+          <div class="stat-item stat-ai">
+            <span class="stat-label">AI Count:</span>
+            <span class="stat-value stat-ai-count-strip">0</span>
+          </div>
+          <div class="stat-item stat-ai">
+            <span class="stat-label">AI FPS:</span>
+            <span class="stat-value stat-ai-fps-strip">0.0</span>
+          </div>
+          <div class="stat-item stat-ai">
+            <span class="stat-label">AI Mode:</span>
+            <span class="stat-value stat-ai-mode-strip">DET</span>
+          </div>
+          <div class="stat-item stat-ai">
+            <span class="stat-label">Zone:</span>
+            <span class="stat-value stat-ai-zone-strip">Off</span>
+          </div>
           <div class="stat-item">
             <span class="stat-label">Protocol:</span>
             <span class="stat-value stat-protocol">${this.streamConfig.type.toUpperCase()}</span>
@@ -146,10 +208,17 @@ class VideoStreamPlayer {
     `;
 
     this.videoElement = this.container.querySelector(".video-element");
+    this.videoContainer = this.container.querySelector(".video-container");
+    this.zoneOverlay = this.container.querySelector(".zone-edit-overlay");
+    this.manualCanvas = this.container.querySelector(".manual-count-canvas");
     this.overlay = this.container.querySelector(".video-overlay");
     this.loadingSpinner = this.container.querySelector(".loading-spinner");
     this.statusIndicator = this.container.querySelector(".status-indicator");
     this.statusText = this.container.querySelector(".status-text");
+    this.aiCountValues = this.container.querySelectorAll(".stat-ai-count, .stat-ai-count-strip");
+    this.aiFpsValues = this.container.querySelectorAll(".stat-ai-fps, .stat-ai-fps-strip");
+    this.aiModeValues = this.container.querySelectorAll(".stat-ai-mode, .stat-ai-mode-strip");
+    this.aiZoneValues = this.container.querySelectorAll(".stat-ai-zone, .stat-ai-zone-strip");
     // Next/Previous Stream buttons
     const nextStreamBtn = this.container.querySelector(".next-stream-btn");
     const prevStreamBtn = this.container.querySelector(".prev-stream-btn");
@@ -167,6 +236,10 @@ class VideoStreamPlayer {
     }
 
     this.setupEventListeners();
+    this.setupResizeObserver();
+    this.updateZoneOverlay();
+    this.resizeManualCanvas();
+    this.drawManualPoints();
     this.startStream();
   }
 
@@ -207,6 +280,43 @@ class VideoStreamPlayer {
     if (snapshotBtn) {
       snapshotBtn.addEventListener("click", () => this.takeSnapshot());
     }
+
+    const manualCountBtn = this.container.querySelector(".manual-count-btn");
+    if (manualCountBtn) {
+      manualCountBtn.addEventListener("click", () => this.toggleManualMode());
+    }
+
+    const zoneEditBtn = this.container.querySelector(".zone-edit-btn");
+    if (zoneEditBtn) {
+      zoneEditBtn.addEventListener("click", () => {
+        if (this.streamManager) {
+          const enableZone = !this.streamManager.zoneEditing;
+          if (window.crowdCounter && window.crowdCounter.setZoneEnabled) {
+            window.crowdCounter.setZoneEnabled(enableZone, { markDirty: true });
+            if (window.crowdCounter.applyZoneSettingsNow) {
+              window.crowdCounter.applyZoneSettingsNow(enableZone ? "Enabling counting zone..." : "Disabling counting zone...");
+            }
+          }
+          this.streamManager.setZoneEditing(enableZone, { skipApply: true });
+        }
+      });
+    }
+
+    if (this.zoneOverlay) {
+      this.zoneOverlay.addEventListener("mousedown", (e) => this.startZoneDrag(e));
+      window.addEventListener("mousemove", this.boundZoneMove);
+      window.addEventListener("mouseup", this.boundZoneEnd);
+    }
+
+    if (this.manualCanvas) {
+      this.manualCanvas.addEventListener("click", (e) => this.handleManualCanvasClick(e, false));
+      this.manualCanvas.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        this.handleManualCanvasClick(e, true);
+      });
+    }
+
+    window.addEventListener("resize", this.boundResize);
 
     const recordBtn = this.container.querySelector(".record-btn");
     if (recordBtn) {
@@ -263,15 +373,20 @@ class VideoStreamPlayer {
       });
 
       this.videoElement.addEventListener("loadeddata", () => {
+        this.hasVideoFrame = true;
         this.updateStatus("connected");
         this.updateStats();
+        this.updateInteractiveLayers();
       });
 
       this.videoElement.addEventListener("loadedmetadata", () => {
+        this.hasVideoFrame = true;
         this.updateStats();
+        this.updateInteractiveLayers();
       });
 
       this.videoElement.addEventListener("error", (e) => {
+        this.hasVideoFrame = false;
         console.error("Video error:", e);
         this.updateStatus("error");
         this.showError("Failed to load video stream");
@@ -286,6 +401,270 @@ class VideoStreamPlayer {
         this.updateVolumeDisplay();
       });
     }
+  }
+
+  setupResizeObserver() {
+    if (!this.videoContainer || typeof ResizeObserver === "undefined") return;
+
+    this.resizeObserver = new ResizeObserver(() => {
+      this.updateInteractiveLayers();
+    });
+    this.resizeObserver.observe(this.videoContainer);
+  }
+
+  getRenderedVideoRect() {
+    if (!this.videoContainer) {
+      return { left: 0, top: 0, width: 1, height: 1 };
+    }
+
+    const containerRect = this.videoContainer.getBoundingClientRect();
+    const containerWidth = Math.max(1, containerRect.width);
+    const containerHeight = Math.max(1, containerRect.height);
+    const videoWidth = this.videoElement && this.videoElement.videoWidth ? this.videoElement.videoWidth : 16;
+    const videoHeight = this.videoElement && this.videoElement.videoHeight ? this.videoElement.videoHeight : 9;
+    const videoRatio = videoWidth / videoHeight;
+    const containerRatio = containerWidth / containerHeight;
+
+    let width = containerWidth;
+    let height = containerHeight;
+    let left = 0;
+    let top = 0;
+
+    if (containerRatio > videoRatio) {
+      height = containerHeight;
+      width = height * videoRatio;
+      left = (containerWidth - width) / 2;
+    } else {
+      width = containerWidth;
+      height = width / videoRatio;
+      top = (containerHeight - height) / 2;
+    }
+
+    return { left, top, width, height };
+  }
+
+  syncInteractiveLayerGeometry() {
+    const rect = this.getRenderedVideoRect();
+    [this.zoneOverlay, this.manualCanvas].forEach((layer) => {
+      if (!layer) return;
+      layer.style.left = `${rect.left}px`;
+      layer.style.top = `${rect.top}px`;
+      layer.style.width = `${rect.width}px`;
+      layer.style.height = `${rect.height}px`;
+    });
+  }
+
+  updateInteractiveLayers() {
+    this.syncInteractiveLayerGeometry();
+    this.updateZoneOverlay();
+    this.drawManualPoints();
+  }
+
+  updateZoneOverlay() {
+    if (!this.zoneOverlay || !this.streamManager) return;
+
+    this.syncInteractiveLayerGeometry();
+
+    const settings = window.crowdCounter && window.crowdCounter.getSettings ? window.crowdCounter.getSettings() : {};
+    const enabled = this.streamManager.zoneEditing && !!settings.zone_enabled && this.hasVideoFrame;
+    const box = this.zoneOverlay.querySelector(".zone-box");
+    const rect = this.streamManager.zoneRectNorm;
+
+    this.zoneOverlay.classList.toggle("active", enabled);
+    if (box) {
+      box.style.left = `${rect.x1 * 100}%`;
+      box.style.top = `${rect.y1 * 100}%`;
+      box.style.width = `${(rect.x2 - rect.x1) * 100}%`;
+      box.style.height = `${(rect.y2 - rect.y1) * 100}%`;
+    }
+
+    // If zone editing is enabled, turn off manual dot mode
+    if (enabled && this.manualMode) {
+      this.toggleManualMode();
+    }
+
+    const btn = this.container.querySelector(".zone-edit-btn");
+    if (btn) {
+      btn.classList.toggle("active", enabled);
+    }
+
+    this.updateCrowdStatsOverlay();
+  }
+
+  updateCrowdStatsOverlay(stats = null) {
+    const state = window.crowdCounter && window.crowdCounter.getState ? window.crowdCounter.getState() : null;
+    const settings = window.crowdCounter && window.crowdCounter.getSettings ? window.crowdCounter.getSettings() : {};
+    const count = stats && stats.count !== undefined ? stats.count : state ? state.count : 0;
+    const fps = stats && stats.fps !== undefined ? Number(stats.fps) : state ? Number(state.fps) : 0;
+    const mode = stats && stats.mode ? stats.mode : state ? state.mode : "DET";
+    const zoneEnabled = !!settings.zone_enabled;
+
+    this.aiCountValues.forEach((el) => { el.textContent = String(Number.isFinite(Number(count)) ? count : 0); });
+    this.aiFpsValues.forEach((el) => { el.textContent = Number.isFinite(fps) ? fps.toFixed(1) : "0.0"; });
+    this.aiModeValues.forEach((el) => { el.textContent = mode || "DET"; });
+    this.aiZoneValues.forEach((el) => {
+      el.textContent = zoneEnabled ? "On" : "Off";
+      el.classList.toggle("active", zoneEnabled);
+    });
+  }
+
+  startZoneDrag(event) {
+    if (!this.streamManager || !this.streamManager.zoneEditing) return;
+    const box = event.target.closest(".zone-box");
+    if (!box) return;
+
+    event.preventDefault();
+    if (window.crowdCounter && window.crowdCounter.beginZoneEdit) {
+      window.crowdCounter.beginZoneEdit();
+    }
+    const bounds = this.zoneOverlay.getBoundingClientRect();
+    this.zoneDrag = {
+      handle: event.target.dataset.handle || "move",
+      startX: (event.clientX - bounds.left) / bounds.width,
+      startY: (event.clientY - bounds.top) / bounds.height,
+      startRect: { ...this.streamManager.zoneRectNorm },
+    };
+  }
+
+  moveZoneDrag(event) {
+    if (!this.zoneDrag || !this.streamManager || !this.zoneOverlay) return;
+
+    const bounds = this.zoneOverlay.getBoundingClientRect();
+    const x = (event.clientX - bounds.left) / bounds.width;
+    const y = (event.clientY - bounds.top) / bounds.height;
+    const dx = x - this.zoneDrag.startX;
+    const dy = y - this.zoneDrag.startY;
+    const r = { ...this.zoneDrag.startRect };
+
+    if (this.zoneDrag.handle === "move") {
+      const width = r.x2 - r.x1;
+      const height = r.y2 - r.y1;
+      r.x1 = Math.min(Math.max(0, r.x1 + dx), 1 - width);
+      r.y1 = Math.min(Math.max(0, r.y1 + dy), 1 - height);
+      r.x2 = r.x1 + width;
+      r.y2 = r.y1 + height;
+    } else {
+      if (this.zoneDrag.handle.includes("w")) r.x1 += dx;
+      if (this.zoneDrag.handle.includes("e")) r.x2 += dx;
+      if (this.zoneDrag.handle.includes("n")) r.y1 += dy;
+      if (this.zoneDrag.handle.includes("s")) r.y2 += dy;
+    }
+
+    this.streamManager.setZoneRectNorm(r);
+  }
+
+  endZoneDrag() {
+    if (this.zoneDrag && window.crowdCounter && window.crowdCounter.applyZoneSettingsNow) {
+      window.crowdCounter.applyZoneSettingsNow("Applying counting zone to stream...");
+    }
+    this.zoneDrag = null;
+  }
+
+  toggleManualMode() {
+    this.manualMode = !this.manualMode;
+    // If manual mode is turned on, force zone editing off to avoid overlap
+    if (this.manualMode && this.streamManager) {
+      this.streamManager.setZoneEditing(false);
+    }
+    const btn = this.container.querySelector(".manual-count-btn");
+    if (btn) {
+      btn.classList.toggle("active", this.manualMode);
+    }
+    if (this.manualCanvas) {
+      this.syncInteractiveLayerGeometry();
+      this.manualCanvas.classList.toggle("active", this.manualMode);
+    }
+    this.drawManualPoints();
+    this.showNotification(this.manualMode ? "Manual dot mode enabled" : "Manual dot mode disabled");
+  }
+
+  handleManualCanvasClick(event, forceRemove) {
+    if (!this.manualMode || !this.manualCanvas) return;
+
+    const rect = this.manualCanvas.getBoundingClientRect();
+    const x = (event.clientX - rect.left) / rect.width;
+    const y = (event.clientY - rect.top) / rect.height;
+
+    if (x < 0 || x > 1 || y < 0 || y > 1) {
+      return;
+    }
+
+    if (forceRemove || event.shiftKey) {
+      this.removeNearestManualPoint(x, y);
+    } else {
+      this.manualPoints.push({ x, y });
+    }
+
+    this.syncManualCorrection();
+    this.drawManualPoints();
+  }
+
+  removeNearestManualPoint(x, y) {
+    if (!this.manualPoints.length) return;
+
+    let nearestIndex = -1;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+
+    this.manualPoints.forEach((point, index) => {
+      const dx = point.x - x;
+      const dy = point.y - y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < nearestDistance) {
+        nearestDistance = dist;
+        nearestIndex = index;
+      }
+    });
+
+    if (nearestIndex !== -1 && nearestDistance <= 0.04) {
+      this.manualPoints.splice(nearestIndex, 1);
+    }
+  }
+
+  resizeManualCanvas() {
+    if (!this.manualCanvas) return;
+    const rect = this.manualCanvas.getBoundingClientRect();
+    const width = Math.max(1, Math.floor(rect.width));
+    const height = Math.max(1, Math.floor(rect.height));
+
+    if (this.manualCanvas.width !== width || this.manualCanvas.height !== height) {
+      this.manualCanvas.width = width;
+      this.manualCanvas.height = height;
+    }
+  }
+
+  drawManualPoints() {
+    if (!this.manualCanvas) return;
+    this.resizeManualCanvas();
+
+    const ctx = this.manualCanvas.getContext("2d");
+    ctx.clearRect(0, 0, this.manualCanvas.width, this.manualCanvas.height);
+
+    this.manualPoints.forEach((point, index) => {
+      const x = point.x * this.manualCanvas.width;
+      const y = point.y * this.manualCanvas.height;
+      ctx.beginPath();
+      ctx.arc(x, y, 6, 0, Math.PI * 2);
+      ctx.fillStyle = "#ef4444";
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "#ffffff";
+      ctx.stroke();
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "11px Arial";
+      ctx.fillText(String(index + 1), x + 8, y - 8);
+    });
+  }
+
+  syncManualCorrection() {
+    if (window.crowdCounter && window.crowdCounter.setManualCorrection) {
+      window.crowdCounter.setManualCorrection(this.manualPoints.length);
+    }
+  }
+
+  clearManualCorrections() {
+    this.manualPoints = [];
+    this.syncManualCorrection();
+    this.drawManualPoints();
   }
   // New methods for stream switching
   switchToNextStream() {
@@ -390,6 +769,7 @@ class VideoStreamPlayer {
       this.videoElement.srcObject = null;
       this.videoElement.load();
     }
+    this.manualPoints = [];
   }
 
   async startStream() {
@@ -1023,6 +1403,13 @@ Stream Settings:
       this.videoElement.load();
       this.videoElement = null;
     }
+    window.removeEventListener("mousemove", this.boundZoneMove);
+    window.removeEventListener("mouseup", this.boundZoneEnd);
+    window.removeEventListener("resize", this.boundResize);
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = null;
+    }
 
     this.container.innerHTML = "";
   }
@@ -1033,6 +1420,8 @@ class StreamManager {
   constructor() {
     this.players = new Map();
     this.streams = [];
+    this.zoneEditing = false;
+    this.zoneRectNorm = { x1: 0.1, y1: 0.1, x2: 0.9, y2: 0.9 };
   }
 
   async initialize() {
@@ -1211,6 +1600,88 @@ class StreamManager {
 
   stopAllStreams() {
     this.destroyAllPlayers();
+  }
+
+  clearManualCorrections() {
+    this.players.forEach((player) => {
+      if (player.clearManualCorrections) {
+        player.clearManualCorrections();
+      }
+    });
+  }
+
+  updateCrowdStats(stats) {
+    this.players.forEach((player) => {
+      if (player.updateCrowdStatsOverlay) {
+        player.updateCrowdStatsOverlay(stats);
+      }
+    });
+  }
+
+  setZoneEditing(enabled, options = {}) {
+    const wasEditing = this.zoneEditing;
+    this.zoneEditing = enabled;
+    if (enabled && window.crowdCounter && window.crowdCounter.setZoneEnabled) {
+      window.crowdCounter.setZoneEnabled(true, { markDirty: true });
+    }
+    if (!options.skipApply && !enabled && wasEditing && window.crowdCounter && window.crowdCounter.applyZoneSettingsNow) {
+      window.crowdCounter.applyZoneSettingsNow("Applying counting zone to stream...");
+    }
+    this.players.forEach((player) => {
+      if (player.updateZoneOverlay) {
+        player.updateZoneOverlay();
+      }
+    });
+  }
+
+  setZoneRectNorm(rect, options = {}) {
+    const minSize = 0.05;
+    let x1 = Math.max(0, Math.min(1, rect.x1));
+    let y1 = Math.max(0, Math.min(1, rect.y1));
+    let x2 = Math.max(0, Math.min(1, rect.x2));
+    let y2 = Math.max(0, Math.min(1, rect.y2));
+
+    if (x2 < x1) [x1, x2] = [x2, x1];
+    if (y2 < y1) [y1, y2] = [y2, y1];
+    if (x2 - x1 < minSize) {
+      if (x1 + minSize <= 1) {
+        x2 = x1 + minSize;
+      } else {
+        x1 = Math.max(0, x2 - minSize);
+      }
+    }
+    if (y2 - y1 < minSize) {
+      if (y1 + minSize <= 1) {
+        y2 = y1 + minSize;
+      } else {
+        y1 = Math.max(0, y2 - minSize);
+      }
+    }
+
+    this.zoneRectNorm = { x1, y1, x2, y2 };
+    if (!options.silent && window.crowdCounter && window.crowdCounter.onZoneRectChanged) {
+      window.crowdCounter.onZoneRectChanged(this.getZoneRectNorm());
+    }
+    this.players.forEach((player) => {
+      if (player.updateZoneOverlay) {
+        player.updateZoneOverlay();
+      }
+    });
+  }
+
+  getZoneRectNorm() {
+    const r = this.zoneRectNorm;
+    return [r.x1, r.y1, r.x2, r.y2].map((v) => v.toFixed(4)).join(",");
+  }
+
+  setZoneRectFromNormString(value, options = {}) {
+    if (!value || typeof value !== "string") return false;
+    const parts = value.split(",").map((part) => Number.parseFloat(part.trim()));
+    if (parts.length !== 4 || parts.some((part) => Number.isNaN(part))) {
+      return false;
+    }
+    this.setZoneRectNorm({ x1: parts[0], y1: parts[1], x2: parts[2], y2: parts[3] }, options);
+    return true;
   }
 }
 

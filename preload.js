@@ -51,8 +51,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Crowd Counter Control
   startCrowdCounter:  (config) => ipcRenderer.invoke("start-crowd-counter", config),
+  updateCrowdCounterConfig: (config) => ipcRenderer.invoke("update-crowd-counter-config", config),
   stopCrowdCounter: () => ipcRenderer.invoke("stop-crowd-counter"),
   getCrowdCounterStatus: () => ipcRenderer.invoke("get-crowd-counter-status"),
+  selectVideoFile: () => ipcRenderer.invoke("select-video-file"),
 
   // Preset Management
   getBuiltinPresets: () => ipcRenderer.invoke("get-builtin-presets"),

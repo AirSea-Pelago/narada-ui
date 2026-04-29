@@ -862,6 +862,7 @@ body {
     width:100%;
     height:100%;
     object-fit:contain;
+    display:block;
 }
 
 /* Video Overlay */
@@ -1019,6 +1020,26 @@ body {
     display:grid;
     grid-template-columns:repeat(4, 1fr);
     gap:10px;
+}
+
+.video-stats .stat-ai {
+    background:rgba(59, 130, 246, 0.08);
+    border:1px solid rgba(59, 130, 246, 0.16);
+    border-radius:6px;
+    padding:7px 8px;
+}
+
+.video-stats .stat-ai .stat-label {
+    color:#93c5fd;
+}
+
+.video-stats .stat-ai .stat-value {
+    color:white;
+    font-size:14px;
+}
+
+.stat-ai-zone.active {
+    color:var(--success) !important;
 }
 
 .stat-item {
@@ -1590,10 +1611,11 @@ select.form-control {
 
 .cc-stats-container {
   display:flex;
+  flex-wrap:wrap;
   align-items:stretch;
-  background:linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+  background:rgba(15, 23, 42, 0.72);
   padding:15px 20px;
-  gap:15px;
+  gap:12px;
 }
 
 .cc-stat-box {
@@ -1603,13 +1625,16 @@ select.form-control {
   justify-content:center;
   padding:12px 20px;
   background:rgba(0, 0, 0, 0.2);
-  border-radius:10px;
+  border:1px solid rgba(255, 255, 255, 0.06);
+  border-radius:8px;
   min-width:80px;
+  flex:1 1 90px;
 }
 
 .cc-stat-box.cc-stat-primary {
-  background:linear-gradient(135deg, var(--primary) 0%, #8b5cf6 100%);
+  background:linear-gradient(135deg, var(--primary) 0%, #2563eb 100%);
   min-width:120px;
+  flex:1.2 1 130px;
 }
 
 .cc-stat-value {
@@ -1617,6 +1642,9 @@ select.form-control {
   font-weight:700;
   color:white;
   line-height:1.2;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
 }
 
 .cc-stat-box.cc-stat-primary .cc-stat-value {
@@ -1679,6 +1707,149 @@ select.form-control {
   background:rgba(255, 255, 255, 0.08);
   color:white;
   cursor:pointer;
+}
+
+.control-btn.active {
+  background:var(--primary);
+  color:white;
+}
+
+.zone-edit-overlay {
+  position:absolute;
+  left:0;
+  top:0;
+  width:100%;
+  height:100%;
+  pointer-events:none;
+  z-index:3;
+  user-select:none;
+  opacity:0;
+  visibility:hidden;
+  transition:opacity 0.15s ease;
+}
+
+.zone-edit-overlay.active {
+  pointer-events:auto;
+  opacity:1;
+  visibility:visible;
+}
+
+.zone-box {
+  position:absolute;
+  border:2px solid #facc15;
+  background:rgba(250, 204, 21, 0.08);
+  box-shadow:0 0 0 9999px rgba(0, 0, 0, 0.18);
+  cursor:move;
+}
+
+.zone-label {
+  position:absolute;
+  left:8px;
+  top:8px;
+  padding:4px 7px;
+  border-radius:4px;
+  background:rgba(0, 0, 0, 0.65);
+  color:#facc15;
+  font-size:11px;
+  font-weight:700;
+}
+
+.zone-handle {
+  position:absolute;
+  width:14px;
+  height:14px;
+  background:#facc15;
+  border:2px solid #111827;
+  border-radius:50%;
+}
+
+.zone-handle-nw {
+  left:-8px;
+  top:-8px;
+  cursor:nwse-resize;
+}
+
+.zone-handle-ne {
+  right:-8px;
+  top:-8px;
+  cursor:nesw-resize;
+}
+
+.zone-handle-sw {
+  left:-8px;
+  bottom:-8px;
+  cursor:nesw-resize;
+}
+
+.zone-handle-se {
+  right:-8px;
+  bottom:-8px;
+  cursor:nwse-resize;
+}
+
+.manual-count-canvas {
+  position:absolute;
+  left:0;
+  top:0;
+  width:100%;
+  height:100%;
+  pointer-events:none;
+  z-index:4;
+}
+
+.manual-count-canvas.active {
+  pointer-events:auto;
+  cursor:crosshair;
+}
+
+.video-ai-stats-overlay {
+  position:absolute;
+  top:14px;
+  left:14px;
+  z-index:4;
+  display:none;
+  gap:8px;
+  pointer-events:none;
+}
+
+.video-container:fullscreen .video-ai-stats-overlay,
+.video-container:-webkit-full-screen .video-ai-stats-overlay {
+  display:flex;
+}
+
+.video-container:fullscreen {
+  background:#000;
+}
+
+.video-container:fullscreen .video-element,
+.video-container:-webkit-full-screen .video-element {
+  width:100%;
+  height:100%;
+}
+
+.video-ai-stat {
+  min-width:78px;
+  padding:8px 10px;
+  border-radius:6px;
+  background:rgba(2, 6, 23, 0.78);
+  border:1px solid rgba(148, 163, 184, 0.28);
+  backdrop-filter:blur(8px);
+}
+
+.video-ai-stat span {
+  display:block;
+  color:#cbd5e1;
+  font-size:10px;
+  line-height:1;
+  text-transform:uppercase;
+}
+
+.video-ai-stat strong {
+  display:block;
+  margin-top:5px;
+  color:white;
+  font-size:18px;
+  line-height:1;
 }
 
 .cc-correction-btn:hover {

@@ -7,6 +7,8 @@ let errorScreen;
 let loadingScreen;
 let errorMessage;
 let currentStreamIndex = 0; // Track current stream being displayed
+let eventListenersInitialized = false;
+let uiInitialized = false;
 
 // Initialize DOM elements
 function initDOM() {
@@ -137,6 +139,8 @@ if (document.readyState === "loading") {
 
 // Setup event listeners
 function setupEventListeners() {
+  if (eventListenersInitialized) return;
+  eventListenersInitialized = true;
   console.log("[Renderer] Setting up event listeners");
 
   const retryBtn = document.getElementById("retry-btn");
@@ -230,6 +234,8 @@ function setupEventListeners() {
 
 // Setup UI
 function setupUI() {
+  if (uiInitialized) return;
+  uiInitialized = true;
   console.log("[Renderer] Setting up UI");
 
   const modalCloseBtns = document.querySelectorAll(".modal-close");
@@ -653,6 +659,11 @@ function handleLicenseStatus(status) {
             showMediaMTXWarning(
               "MediaMTX server is not running. Video streaming may not work."
             );
+            if (!streamManager) {
+              setTimeout(() => {
+                initializeApp();
+              }, 1000);
+            }
           }
         })
         .catch((error) => {

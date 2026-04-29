@@ -4,7 +4,7 @@ const { spawn, exec } = require("child_process");
 const fs = require("fs");
 const os = require("os");
 
-console.log("[Main] Main. js loaded");
+console.log("[Main] Main.js loaded");
 
 // =============================================================================
 // GLOBAL VARIABLES
@@ -23,7 +23,7 @@ let currentCrowdCounterConfig = null;
 
 /**
  * Find a working Python executable on this machine.
- * Tries: bundled python.exe → "python" → "python3" → "py" (Windows launcher).
+ * Tries: bundled python.exe -> "python" -> "python3" -> "py" (Windows launcher).
  * Returns a Promise that resolves to the executable string, or rejects if none found.
  */
 function resolvePython(bundledPath) {
@@ -82,7 +82,7 @@ function getAppPaths() {
     return {
       root: process.resourcesPath,
       assets: path.join(process.resourcesPath, "assets"),
-      renderer: path.join(process.resourcesPath, "app. asar", "renderer"),
+      renderer: path.join(process.resourcesPath, "app.asar", "renderer"),
       python: "python",
       licenseChecker: path.join(process.resourcesPath, "license-checker.py"),
       mediamtxDir: path.join(process.resourcesPath, "mediamtx"),
@@ -95,8 +95,8 @@ function getMediaMTXPath() {
 
   // In a packaged build, mediamtx can live in one of two places depending on
   // the electron-builder config used:
-  //   1. extraResources  → <resources>/mediamtx/mediamtx.exe   (preferred)
-  //   2. asarUnpack      → <resources>/app.asar.unpacked/mediamtx/mediamtx.exe
+  //   1. extraResources -> <resources>/mediamtx/mediamtx.exe   (preferred)
+  //   2. asarUnpack     -> <resources>/app.asar.unpacked/mediamtx/mediamtx.exe
   //
   // We try both so either config works.
   const exeName = process.platform === "win32" ? "mediamtx.exe" : "mediamtx";
@@ -217,8 +217,8 @@ function startCrowdCounter(config) {
   const args = [
     paths.script,
     "--pre", paths.model,
-    "--source", "rtmp://localhost:1935/matrice4t",
-    "--stream_out", "rtmp://localhost:1935/cognitiveOutput",
+    "--source", config.source_url || "rtmp://localhost:1935/matrice4t",
+    "--stream_out", config.stream_out || "rtmp://localhost:1935/cognitiveOutput",
     "--json_output",
   ];
 
@@ -261,6 +261,9 @@ function startCrowdCounter(config) {
   }
   if (config.zone_margin !== undefined) {
     args.push("--zone_margin", config.zone_margin.toString());
+  }
+  if (config.zone_rect_norm) {
+    args.push("--zone_rect_norm", config.zone_rect_norm);
   }
   if (config.sweep_mode !== undefined) {
     args.push("--sweep_mode", config.sweep_mode ? "True" : "False");
@@ -323,7 +326,7 @@ function startCrowdCounter(config) {
 
     crowdCounterProcess = spawn(paths.python, args, {
       cwd: paths.cwd,
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: ["pipe", "pipe", "pipe"],
       env: {
         ...process.env,
         PYTHONPATH:  paths.cwd,
@@ -336,11 +339,16 @@ function startCrowdCounter(config) {
 
     console.log(`[Main] Crowd Counter started with PID: ${crowdCounterProcess.pid}`);
 
+    let stdoutBuffer = "";
+
     // Handle stdout (JSON output)
     crowdCounterProcess.stdout.on("data", (data) => {
-      const lines = data.toString().split("\n").filter((line) => line.trim());
+      stdoutBuffer += data.toString();
+      const lines = stdoutBuffer.split(/\r?\n/);
+      stdoutBuffer = lines.pop() || "";
 
       for (const line of lines) {
+        if (!line.trim()) continue;
         try {
           const msg = JSON.parse(line);
 
@@ -356,6 +364,8 @@ function startCrowdCounter(config) {
             if (mainWindow && !mainWindow.isDestroyed()) {
               mainWindow. webContents.send("crowd-counter-stats", {
                 count: msg.count,
+                total: msg.total,
+                viewport: msg.viewport,
                 fps: msg.fps,
                 mode: msg.mode,
               });
@@ -432,7 +442,7 @@ function startCrowdCounter(config) {
       mainWindow. webContents.send("crowd-counter-status", {
         running: true,
         pid: crowdCounterProcess.pid,
-        message: "Starting.. .",
+        message: "Starting...",
       });
     }
 
@@ -447,6 +457,28 @@ function startCrowdCounter(config) {
       });
     }
     return false;
+  }
+}
+
+function updateCrowdCounterConfig(config) {
+  if (!crowdCounterProcess || !crowdCounterProcess.stdin || crowdCounterProcess.stdin.destroyed) {
+    return { success: false, error: "Crowd Counter is not running" };
+  }
+
+  currentCrowdCounterConfig = {
+    ...(currentCrowdCounterConfig || {}),
+    ...config,
+  };
+
+  try {
+    crowdCounterProcess.stdin.write(JSON.stringify({
+      type: "config",
+      config,
+    }) + "\n");
+    return { success: true };
+  } catch (error) {
+    console.error("[Main] Failed to update Crowd Counter config:", error);
+    return { success: false, error: error.message };
   }
 }
 
@@ -488,6 +520,8 @@ function getBuiltInPresets() {
       locked: true,
       settings: {
         mode: "standard",
+        source_url: "rtmp://localhost:1935/matrice4t",
+        stream_out: "rtmp://localhost:1935/cognitiveOutput",
         scale: 0.7,
         threshold: 0.39,
         fp16: true,
@@ -498,6 +532,7 @@ function getBuiltInPresets() {
         zone_enabled: false,
         zone_overlay: true,
         zone_margin: 80,
+        zone_rect_norm: "0.1000,0.1000,0.9000,0.9000",
         sweep_mode: false,
         ms_scales:  "1.0",
         ms_threshold:  0.39,
@@ -520,6 +555,8 @@ function getBuiltInPresets() {
       locked: true,
       settings: {
         mode: "multiscale",
+        source_url: "rtmp://localhost:1935/matrice4t",
+        stream_out: "rtmp://localhost:1935/cognitiveOutput",
         scale: 0.75,
         threshold: 0.30,
         fp16: true,
@@ -530,6 +567,7 @@ function getBuiltInPresets() {
         zone_enabled: false,
         zone_overlay: true,
         zone_margin: 80,
+        zone_rect_norm: "0.1000,0.1000,0.9000,0.9000",
         sweep_mode: false,
         ms_scales:  "0.75,1.0,1.25",
         ms_threshold: 0.30,
@@ -552,6 +590,8 @@ function getBuiltInPresets() {
       locked: true,
       settings: {
         mode:  "traffic",
+        source_url: "rtmp://localhost:1935/matrice4t",
+        stream_out: "rtmp://localhost:1935/cognitiveOutput",
         scale: 0.75,
         threshold: 0.28,
         fp16: true,
@@ -562,6 +602,7 @@ function getBuiltInPresets() {
         zone_enabled: true,
         zone_overlay: true,
         zone_margin: 80,
+        zone_rect_norm: "0.1000,0.1000,0.9000,0.9000",
         sweep_mode: true,
         ms_scales: "0.5,0.75,1.0,1.25",
         ms_threshold: 0.28,
@@ -739,7 +780,7 @@ function stopMediaMTX() {
 }
 
 function restartMediaMTX() {
-  console.log("[Main] Restarting MediaMTX.. .");
+  console.log("[Main] Restarting MediaMTX...");
   stopMediaMTX();
   setTimeout(() => {
     startMediaMTX();
@@ -1152,8 +1193,8 @@ function showMediaMTXLogs() {
   });
 
   const logsPath = app.isPackaged
-    ? path.join(process.resourcesPath, "app.asar", "renderer", "logs. html")
-    : path.join(__dirname, "renderer", "logs. html");
+    ? path.join(process.resourcesPath, "app.asar", "renderer", "logs.html")
+    : path.join(__dirname, "renderer", "logs.html");
 
   logWindow.loadFile(logsPath);
 }
@@ -1182,6 +1223,11 @@ ipcMain.handle("stop-crowd-counter", async () => {
   console.log("[Main] IPC: stop-crowd-counter");
   stopCrowdCounter();
   return { success: true };
+});
+
+ipcMain.handle("update-crowd-counter-config", async (event, config) => {
+  console.log("[Main] IPC: update-crowd-counter-config", config);
+  return updateCrowdCounterConfig(config);
 });
 
 ipcMain.handle("get-crowd-counter-status", async () => {
@@ -1469,7 +1515,7 @@ ipcMain.handle("get-asset-path", async (event, assetName) => {
 // =============================================================================
 
 app. whenReady().then(() => {
-  console.log("[Main] App ready, creating window.. .");
+  console.log("[Main] App ready, creating window...");
   console.log("[Main] App packaged:", app.isPackaged);
   console.log("[Main] Resources path:", process.resourcesPath);
   createWindow();
@@ -1494,4 +1540,21 @@ app.on("before-quit", () => {
   console.log("[Main] App quitting, stopping services...");
   stopMediaMTX();
   stopCrowdCounter();
+});
+
+ipcMain.handle("select-video-file", async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: "Select video source",
+    properties: ["openFile"],
+    filters: [
+      { name: "Video Files", extensions: ["mp4", "mov", "mkv", "avi", "m4v", "webm"] },
+      { name: "All Files", extensions: ["*"] },
+    ],
+  });
+
+  if (result.canceled || !result.filePaths.length) {
+    return { canceled: true };
+  }
+
+  return { canceled: false, path: result.filePaths[0] };
 });

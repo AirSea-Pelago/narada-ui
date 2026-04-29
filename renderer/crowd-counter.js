@@ -28,6 +28,9 @@ var LOCKABLE_INPUTS = [
   "cc-scale-input",
   "cc-threshold",
   "cc-threshold-input",
+  "cc-source-url",
+  "cc-stream-out",
+  "cc-browse-source",
   "cc-track",
   "cc-multiscale",
   "cc-fp16",
@@ -77,8 +80,6 @@ function cacheElements() {
     fpsValue: document.getElementById("cc-fps-value"),
     modeValue: document.getElementById("cc-mode-value"),
     statusValue: document.getElementById("cc-status-value"),
-    correctionMinus: document.getElementById("cc-correction-minus"),
-    correctionPlus: document.getElementById("cc-correction-plus"),
     correctionReset: document.getElementById("cc-correction-reset"),
     correctionValue: document.getElementById("cc-correction-value"),
     toggleBtn: document.getElementById("cc-toggle-btn"),
@@ -103,6 +104,9 @@ function cacheElements() {
     fp16: document.getElementById("cc-fp16"),
     fp16Status: document.getElementById("cc-fp16-status"),
     advancedToggle: document.getElementById("cc-advanced-toggle"),
+    sourceUrl: document.getElementById("cc-source-url"),
+    streamOut: document.getElementById("cc-stream-out"),
+    browseSource: document.getElementById("cc-browse-source"),
     streamFps: document.getElementById("cc-stream-fps"),
     streamBitrate: document.getElementById("cc-stream-bitrate"),
     streamCodec: document.getElementById("cc-stream-codec"),
@@ -225,21 +229,25 @@ function setupEventListeners() {
   setupToggleSwitch(cc. multiscale, cc.multiscaleStatus);
   setupToggleSwitch(cc.fp16, cc. fp16Status);
 
-  if (cc.correctionMinus) {
-    cc.correctionMinus.addEventListener("click", function () {
-      adjustManualCorrection(-1);
-    });
-  }
-
-  if (cc.correctionPlus) {
-    cc.correctionPlus.addEventListener("click", function () {
-      adjustManualCorrection(1);
-    });
-  }
-
   if (cc.correctionReset) {
     cc.correctionReset.addEventListener("click", function () {
       setManualCorrection(0);
+      if (window.streamManager) {
+        window.streamManager.clearManualCorrections();
+      }
+    });
+  }
+
+  if (cc.browseSource) {
+    cc.browseSource.addEventListener("click", function () {
+      if (!window.electronAPI || !window.electronAPI.selectVideoFile) return;
+      window.electronAPI.selectVideoFile().then(function (result) {
+        if (!result || result.canceled || !result.path) return;
+        if (cc.sourceUrl) {
+          cc.sourceUrl.value = result.path;
+          markPendingChanges();
+        }
+      });
     });
   }
 
@@ -311,10 +319,11 @@ function setupEventListeners() {
   }
 
   var advInputs = [
+    cc.sourceUrl, cc.streamOut,
     cc.streamFps, cc.streamBitrate, cc.streamCodec, cc.streamPreset,
     cc.streamWidth, cc.streamHeight, cc.msScales, cc.msThreshold,
     cc.msNmsRadius, cc.detectInterval, cc.maxDrift, cc.overlayStyle,
-    cc.zoneEnabled, cc.zoneOverlay, cc.zoneMargin, cc.sweepMode,
+    cc.zoneOverlay, cc.zoneMargin, cc.sweepMode,
     cc.boxSize, cc.boxThickness, cc.queueSize, cc.gpuId, cc. out, cc.showPreview,
   ];
 
@@ -324,6 +333,17 @@ function setupEventListeners() {
       input.addEventListener("input", markPendingChanges);
     }
   });
+
+  if (cc.zoneEnabled) {
+    cc.zoneEnabled.addEventListener("change", function () {
+      markPendingChanges();
+      if (!cc.zoneEnabled.checked && window.streamManager) {
+        window.streamManager.setZoneEditing(false, { skipApply: true });
+      }
+      applyZoneSettingsNow(cc.zoneEnabled.checked ? "Enabling counting zone..." : "Disabling counting zone...");
+      updateVideoPlayerCrowdStats();
+    });
+  }
 }
 
 function setupToggleSwitch(toggleEl, statusEl) {
@@ -489,8 +509,10 @@ function getDefaultPresets() {
       description: "Fast detection for dense crowds",
       settings: {
         mode: "standard", scale: 0.7, threshold: 0.39, fp16: true, track: false,
+        source_url: "rtmp://localhost:1935/matrice4t", stream_out: "rtmp://localhost:1935/cognitiveOutput",
         multiscale: false, detect_interval: 2, max_drift: 20.0, ms_scales: "1.0",
-        zone_enabled: false, zone_overlay: true, zone_margin: 80, sweep_mode: false,
+        zone_enabled: false, zone_overlay: true, zone_margin: 80,
+        zone_rect_norm: "0.1000,0.1000,0.9000,0.9000", sweep_mode: false,
         ms_threshold: 0.39, ms_nms_radius:  12, overlay_style: "boxes", box_size: 14,
         box_thickness: 2, stream_fps: 30, stream_bitrate: "2500k", stream_codec: "libx264",
         queue_size: 5, gpu_id: "0",
@@ -502,8 +524,10 @@ function getDefaultPresets() {
       description: "Better for sparse/varied crowds",
       settings: {
         mode: "multiscale", scale: 0.75, threshold: 0.3, fp16: true, track:  false,
+        source_url: "rtmp://localhost:1935/matrice4t", stream_out: "rtmp://localhost:1935/cognitiveOutput",
         multiscale:  true, detect_interval: 1, max_drift: 20.0, ms_scales: "0.75,1.0,1.25",
-        zone_enabled: false, zone_overlay: true, zone_margin: 80, sweep_mode: false,
+        zone_enabled: false, zone_overlay: true, zone_margin: 80,
+        zone_rect_norm: "0.1000,0.1000,0.9000,0.9000", sweep_mode: false,
         ms_threshold: 0.3, ms_nms_radius: 12, overlay_style: "boxes", box_size:  14,
         box_thickness: 2, stream_fps:  30, stream_bitrate:  "2500k", stream_codec: "libx264",
         stream_preset: "ultrafast", queue_size: 2, gpu_id: "0",
@@ -515,8 +539,10 @@ function getDefaultPresets() {
       description: "Optimized for motorcycles/vehicles",
       settings: {
         mode: "traffic", scale: 0.75, threshold: 0.28, fp16: true, track:  true,
+        source_url: "rtmp://localhost:1935/matrice4t", stream_out: "rtmp://localhost:1935/cognitiveOutput",
         multiscale: true, detect_interval: 10, max_drift: 25.0, ms_scales: "0.5,0.75,1.0,1.25",
-        zone_enabled: true, zone_overlay: true, zone_margin: 80, sweep_mode: true,
+        zone_enabled: true, zone_overlay: true, zone_margin: 80,
+        zone_rect_norm: "0.1000,0.1000,0.9000,0.9000", sweep_mode: true,
         ms_threshold: 0.28, ms_nms_radius: 12, overlay_style: "boxes", box_size:  14,
         box_thickness: 2, stream_fps:  30, stream_bitrate:  "2500k", stream_codec: "libx264",
         stream_preset: "ultrafast", queue_size: 2, gpu_id: "0",
@@ -641,6 +667,12 @@ function applySettingsToUI(s) {
   if (cc.thresholdInput && s.threshold !== undefined) {
     cc.thresholdInput.value = parseFloat(s. threshold).toFixed(2);
   }
+  if (cc.sourceUrl && s.source_url !== undefined) {
+    cc.sourceUrl.value = s.source_url;
+  }
+  if (cc.streamOut && s.stream_out !== undefined) {
+    cc.streamOut.value = s.stream_out;
+  }
   if (cc. track && s.track !== undefined) {
     cc.track.checked = s.track;
   }
@@ -719,6 +751,17 @@ function applySettingsToUI(s) {
   if (cc.sweepMode && s.sweep_mode !== undefined) {
     cc.sweepMode.checked = !!s.sweep_mode;
   }
+  if (s.zone_rect_norm && window.streamManager && window.streamManager.setZoneRectFromNormString) {
+    window.streamManager.setZoneRectFromNormString(s.zone_rect_norm, { silent: true });
+  }
+}
+
+function assignNumberSetting(target, key, input, parser) {
+  if (!input) return;
+  var value = parser(input.value);
+  if (Number.isFinite(value)) {
+    target[key] = value;
+  }
 }
 
 // =============================================================================
@@ -728,33 +771,38 @@ function applySettingsToUI(s) {
 function collectSettings() {
   var s = {};
   s.mode = ccState.currentPreset ?  ccState.currentPreset.id : "standard";
-  if (cc.scale) s.scale = parseFloat(cc.scale.value);
-  if (cc.threshold) s.threshold = parseFloat(cc.threshold.value);
+  if (cc.sourceUrl) s.source_url = cc.sourceUrl.value.trim();
+  if (cc.streamOut) s.stream_out = cc.streamOut.value.trim();
+  assignNumberSetting(s, "scale", cc.scale, parseFloat);
+  assignNumberSetting(s, "threshold", cc.threshold, parseFloat);
   if (cc.track) s.track = cc.track.checked;
   if (cc.multiscale) s.multiscale = cc.multiscale.checked;
   if (cc.fp16) s.fp16 = cc.fp16.checked;
-  if (cc.streamFps) s.stream_fps = parseInt(cc.streamFps.value);
-  if (cc.streamBitrate) s.stream_bitrate = cc.streamBitrate.value;
+  assignNumberSetting(s, "stream_fps", cc.streamFps, function (value) { return parseInt(value, 10); });
+  if (cc.streamBitrate) s.stream_bitrate = cc.streamBitrate.value.trim();
   if (cc.streamCodec) s.stream_codec = cc.streamCodec.value;
   if (cc.streamPreset) s.stream_preset = cc.streamPreset.value;
-  if (cc.streamWidth) s.stream_width = parseInt(cc.streamWidth.value);
-  if (cc.streamHeight) s.stream_height = parseInt(cc.streamHeight.value);
-  if (cc.msScales) s.ms_scales = cc.msScales.value;
-  if (cc.msThreshold) s.ms_threshold = parseFloat(cc.msThreshold.value);
-  if (cc.msNmsRadius) s.ms_nms_radius = parseInt(cc.msNmsRadius. value);
-  if (cc.detectInterval) s.detect_interval = parseInt(cc.detectInterval. value);
-  if (cc.maxDrift) s.max_drift = parseFloat(cc.maxDrift.value);
+  assignNumberSetting(s, "stream_width", cc.streamWidth, function (value) { return parseInt(value, 10); });
+  assignNumberSetting(s, "stream_height", cc.streamHeight, function (value) { return parseInt(value, 10); });
+  if (cc.msScales) s.ms_scales = cc.msScales.value.trim();
+  assignNumberSetting(s, "ms_threshold", cc.msThreshold, parseFloat);
+  assignNumberSetting(s, "ms_nms_radius", cc.msNmsRadius, function (value) { return parseInt(value, 10); });
+  assignNumberSetting(s, "detect_interval", cc.detectInterval, function (value) { return parseInt(value, 10); });
+  assignNumberSetting(s, "max_drift", cc.maxDrift, parseFloat);
   if (cc.zoneEnabled) s.zone_enabled = cc.zoneEnabled.checked;
   if (cc.zoneOverlay) s.zone_overlay = cc.zoneOverlay.checked;
-  if (cc.zoneMargin) s.zone_margin = parseInt(cc.zoneMargin.value);
+  assignNumberSetting(s, "zone_margin", cc.zoneMargin, function (value) { return parseInt(value, 10); });
+  if (window.streamManager && window.streamManager.getZoneRectNorm) {
+    s.zone_rect_norm = window.streamManager.getZoneRectNorm();
+  }
   if (cc.sweepMode) s.sweep_mode = cc.sweepMode.checked;
   if (cc.overlayStyle) s.overlay_style = cc.overlayStyle.value;
-  if (cc.boxSize) s.box_size = parseInt(cc. boxSize.value);
-  if (cc.boxThickness) s.box_thickness = parseInt(cc.boxThickness.value);
-  if (cc.queueSize) s.queue_size = parseInt(cc.queueSize.value);
+  assignNumberSetting(s, "box_size", cc.boxSize, function (value) { return parseInt(value, 10); });
+  assignNumberSetting(s, "box_thickness", cc.boxThickness, function (value) { return parseInt(value, 10); });
+  assignNumberSetting(s, "queue_size", cc.queueSize, function (value) { return parseInt(value, 10); });
   if (cc.gpuId) s.gpu_id = cc.gpuId.value;
   if (cc.out && cc.out.value) s.out = cc.out.value;
-  if (cc.showPreview) s.show = cc.showPreview.checked || s.zone_enabled;
+  if (cc.showPreview) s.show = cc.showPreview.checked;
   return s;
 }
 
@@ -835,6 +883,43 @@ function applySettings() {
   }
 }
 
+function applyZoneSettingsNow(message) {
+  if (!ccState.pendingChanges) return;
+
+  if (ccState.running && window.electronAPI && window.electronAPI.updateCrowdCounterConfig) {
+    var settings = collectSettings();
+    addLog("info", message || "Applying counting zone...");
+    window.electronAPI.updateCrowdCounterConfig({
+      zone_enabled: settings.zone_enabled,
+      zone_overlay: false,
+      zone_margin: settings.zone_margin,
+      zone_rect_norm: settings.zone_rect_norm,
+    }).then(function (result) {
+      if (!result || !result.success) {
+        addLog("error", "Zone update failed: " + ((result && result.error) || "unknown error"));
+        return;
+      }
+      ccState.pendingChanges = false;
+      updateApplyButton();
+      addLog("success", "Counting zone updated");
+    }).catch(function (err) {
+      addLog("error", "Zone update failed: " + err.message);
+    });
+  } else {
+    updateApplyButton();
+  }
+}
+
+function updateVideoPlayerCrowdStats() {
+  if (window.streamManager && window.streamManager.updateCrowdStats) {
+    window.streamManager.updateCrowdStats({
+      count: ccState.count,
+      fps: ccState.fps,
+      mode: ccState.mode,
+    });
+  }
+}
+
 // =============================================================================
 // UI UPDATES
 // =============================================================================
@@ -867,28 +952,44 @@ function updateStatus(status) {
 }
 
 function updateStats(stats) {
-  ccState.rawCount = stats.total !== undefined && stats.total !== null ? stats.total : stats.count;
+  var mode = (stats.mode || "").toUpperCase();
+  var zoneEnabled = cc.zoneEnabled && cc.zoneEnabled.checked;
+  var rawCount = Number(stats.count);
+  if (mode === "SWEEP") {
+    if (zoneEnabled && stats.viewport !== undefined && stats.viewport !== null) {
+      rawCount = Number(stats.viewport);
+    } else if (stats.total !== undefined && stats.total !== null) {
+      rawCount = Number(stats.total);
+    }
+  }
+  if (!Number.isFinite(rawCount)) {
+    rawCount = 0;
+  }
+
+  ccState.rawCount = rawCount;
   ccState.count = ccState.rawCount + ccState.manualCorrection;
-  ccState.fps = stats.fps;
-  ccState.mode = stats.mode || (stats.total !== undefined ? "SWEEP" : "DET");
+  ccState.fps = Number.isFinite(Number(stats.fps)) ? Number(stats.fps) : 0;
+  ccState.mode = mode || "DET";
 
   if (cc.count) cc.count.textContent = ccState.count;
-  if (cc.fpsValue) cc.fpsValue.textContent = stats.fps;
+  if (cc.fpsValue) cc.fpsValue.textContent = ccState.fps.toFixed(1);
   if (cc.modeValue) cc.modeValue.textContent = ccState.mode;
+  updateVideoPlayerCrowdStats();
 }
 
 function setManualCorrection(value) {
-  ccState.manualCorrection = value;
+  var correction = parseInt(value, 10);
+  ccState.manualCorrection = Number.isFinite(correction) ? Math.max(0, correction) : 0;
   ccState.count = ccState.rawCount + ccState.manualCorrection;
 
   if (cc.count) {
     cc.count.textContent = ccState.count;
   }
   if (cc.correctionValue) {
-    cc.correctionValue.textContent =
-      ccState.manualCorrection >= 0 ? "+" + ccState.manualCorrection : String(ccState.manualCorrection);
+    cc.correctionValue.textContent = String(ccState.manualCorrection);
   }
 
+  updateVideoPlayerCrowdStats();
   addLog("info", "Manual correction: " + ccState.manualCorrection);
 }
 
@@ -896,10 +997,44 @@ function adjustManualCorrection(delta) {
   setManualCorrection(ccState.manualCorrection + delta);
 }
 
-function markPendingChanges() {
+function markPendingChanges(forceEdit) {
+  if (!ccState.editing && forceEdit) {
+    enterEditMode();
+  }
   if (! ccState.editing) return;
   ccState.pendingChanges = true;
   updateApplyButton();
+}
+
+function setZoneEnabled(enabled, options) {
+  options = options || {};
+  if (options.markDirty && !ccState.editing) {
+    enterEditMode();
+  }
+  if (cc.zoneEnabled) {
+    cc.zoneEnabled.checked = !!enabled;
+  }
+  if (!enabled && window.streamManager) {
+    window.streamManager.setZoneEditing(false, { skipApply: true });
+  }
+  if (options.markDirty) {
+    markPendingChanges();
+  }
+  updateVideoPlayerCrowdStats();
+}
+
+function beginZoneEdit() {
+  if (!ccState.editing) {
+    enterEditMode();
+  }
+  setZoneEnabled(true, { markDirty: true });
+}
+
+function onZoneRectChanged() {
+  if (!ccState.editing) {
+    enterEditMode();
+  }
+  markPendingChanges();
 }
 
 function updateApplyButton() {
@@ -1126,6 +1261,13 @@ window.crowdCounter = {
   apply: applySettings,
   getState: function () { return ccState; },
   getSettings: collectSettings,
+  setManualCorrection: setManualCorrection,
+  getManualCorrection: function () { return ccState.manualCorrection; },
+  setZoneEnabled: setZoneEnabled,
+  beginZoneEdit: beginZoneEdit,
+  onZoneRectChanged: onZoneRectChanged,
+  applyZoneSettingsNow: applyZoneSettingsNow,
+  markPendingChanges: markPendingChanges,
   addLog: addLog,
 };
 

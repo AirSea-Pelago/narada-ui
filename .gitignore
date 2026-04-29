@@ -4,3 +4,4 @@ crowd_counter/
 python/
 python-embed.zip
 crowd-python-embed.zip
+.npm-cache/
