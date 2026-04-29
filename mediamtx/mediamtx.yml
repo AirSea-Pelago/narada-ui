@@ -18,10 +18,36 @@ rtmp: true
 rtmpAddress: :1935
 
 paths:
-  # Path untuk drone Autel EVO Max 4T
-  drone:
+  # Path untuk menerima RTSP publisher (push mode)
+
+  cognitiveOutput: #hasil dari crownd counting AI streamin di sini
     source: publisher
+
+  matrice4t:
+    source: publisher
+    
+  # Path untuk pull dari VLC RTSP server (simulasi camera)
+  # camera:
+  #   source: rtsp://localhost:8555/stream
+  #   sourceProtocol: automatic
+  #   sourceOnDemand: no
+  d60ai:
+    source: rtsp://192.168.144.108/554
+    sourceProtocol: tcp
+    sourceOnDemand: no    
+  # Contoh: Pull dari IP Camera real
+  # ipcam1:
+  #   source: rtsp://admin:password@192.168.1.100:554/stream1
+  #   sourceProtocol: tcp
+  #   source
+
+  mt11rgb:
+    source: rtsp://192.168.144.35:8554/video1
+    sourceProtocol: tcp
+    sourceOnDemand: no 
   
-  # Path lain untuk testing
-  live:
-    source: publisher
+  
+  mt11termal:
+    source: rtsp://192.168.144.35:8554/video2
+    sourceProtocol: tcp
+    sourceOnDemand: no
