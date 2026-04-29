@@ -69,5 +69,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onCrowdCounterStats:  (callback) => {
     ipcRenderer.on("crowd-counter-stats", (event, stats) => callback(stats));
   },
+  onCrowdCounterLog: (callback) => {
+    ipcRenderer.on("crowd-counter-log", (event, log) => callback(log));
+  },
   
 });

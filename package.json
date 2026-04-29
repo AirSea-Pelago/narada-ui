@@ -9,7 +9,7 @@
     "build:win": "electron-builder --win",
     "pack": "electron-builder --dir",
     "postinstall": "electron-builder install-app-deps",
-    "setup-python": "powershell -ExecutionPolicy Bypass -File scripts/setup-python. ps1"
+    "setup-python": "powershell -ExecutionPolicy Bypass -File scripts/setup-python.ps1"
   },
   "build": {
     "appId": "com.airsea.narada",
@@ -26,6 +26,7 @@
       "!src",
       "!.gitignore",
       "!*.md",
+      "!*.zip",
       "!python/**",
       "!crowd_counter/**",
       "!scripts/**",
@@ -65,6 +66,7 @@
       "generate-license.py"
     ],
     "win": {
+      "signAndEditExecutable": false,
       "target": [
         {
           "target": "nsis",
@@ -107,7 +109,7 @@
     "electron-builder": "^24.9.0"
   },
   "dependencies": {
-    "hls. js": "^1.6.15",
+    "hls.js": "^1.6.15",
     "video.js": "^8.23.4",
     "videojs-contrib-hls": "^5.15.0"
   }

@@ -6,6 +6,8 @@ var ccState = {
   running: false,
   editing: false,
   count: 0,
+  rawCount: 0,
+  manualCorrection: 0,
   fps: 0,
   mode: "DET",
   currentPreset: null,
@@ -40,6 +42,10 @@ var LOCKABLE_INPUTS = [
   "cc-ms-nms-radius",
   "cc-detect-interval",
   "cc-max-drift",
+  "cc-zone-enabled",
+  "cc-zone-overlay",
+  "cc-zone-margin",
+  "cc-sweep-mode",
   "cc-overlay-style",
   "cc-box-size",
   "cc-box-thickness",
@@ -71,6 +77,10 @@ function cacheElements() {
     fpsValue: document.getElementById("cc-fps-value"),
     modeValue: document.getElementById("cc-mode-value"),
     statusValue: document.getElementById("cc-status-value"),
+    correctionMinus: document.getElementById("cc-correction-minus"),
+    correctionPlus: document.getElementById("cc-correction-plus"),
+    correctionReset: document.getElementById("cc-correction-reset"),
+    correctionValue: document.getElementById("cc-correction-value"),
     toggleBtn: document.getElementById("cc-toggle-btn"),
     toggleIcon: document.getElementById("cc-toggle-icon"),
     miniLogText: document.getElementById("cc-mini-log-text"),
@@ -104,6 +114,10 @@ function cacheElements() {
     msNmsRadius: document.getElementById("cc-ms-nms-radius"),
     detectInterval: document. getElementById("cc-detect-interval"),
     maxDrift: document. getElementById("cc-max-drift"),
+    zoneEnabled: document.getElementById("cc-zone-enabled"),
+    zoneOverlay: document.getElementById("cc-zone-overlay"),
+    zoneMargin: document.getElementById("cc-zone-margin"),
+    sweepMode: document.getElementById("cc-sweep-mode"),
     overlayStyle: document. getElementById("cc-overlay-style"),
     boxSize: document.getElementById("cc-box-size"),
     boxThickness: document.getElementById("cc-box-thickness"),
@@ -211,6 +225,24 @@ function setupEventListeners() {
   setupToggleSwitch(cc. multiscale, cc.multiscaleStatus);
   setupToggleSwitch(cc.fp16, cc. fp16Status);
 
+  if (cc.correctionMinus) {
+    cc.correctionMinus.addEventListener("click", function () {
+      adjustManualCorrection(-1);
+    });
+  }
+
+  if (cc.correctionPlus) {
+    cc.correctionPlus.addEventListener("click", function () {
+      adjustManualCorrection(1);
+    });
+  }
+
+  if (cc.correctionReset) {
+    cc.correctionReset.addEventListener("click", function () {
+      setManualCorrection(0);
+    });
+  }
+
   if (cc.advancedToggle) {
     cc.advancedToggle.addEventListener("change", function () {
       if (cc.advancedContainer) {
@@ -282,6 +314,7 @@ function setupEventListeners() {
     cc.streamFps, cc.streamBitrate, cc.streamCodec, cc.streamPreset,
     cc.streamWidth, cc.streamHeight, cc.msScales, cc.msThreshold,
     cc.msNmsRadius, cc.detectInterval, cc.maxDrift, cc.overlayStyle,
+    cc.zoneEnabled, cc.zoneOverlay, cc.zoneMargin, cc.sweepMode,
     cc.boxSize, cc.boxThickness, cc.queueSize, cc.gpuId, cc. out, cc.showPreview,
   ];
 
@@ -457,6 +490,7 @@ function getDefaultPresets() {
       settings: {
         mode: "standard", scale: 0.7, threshold: 0.39, fp16: true, track: false,
         multiscale: false, detect_interval: 2, max_drift: 20.0, ms_scales: "1.0",
+        zone_enabled: false, zone_overlay: true, zone_margin: 80, sweep_mode: false,
         ms_threshold: 0.39, ms_nms_radius:  12, overlay_style: "boxes", box_size: 14,
         box_thickness: 2, stream_fps: 30, stream_bitrate: "2500k", stream_codec: "libx264",
         queue_size: 5, gpu_id: "0",
@@ -469,6 +503,7 @@ function getDefaultPresets() {
       settings: {
         mode: "multiscale", scale: 0.75, threshold: 0.3, fp16: true, track:  false,
         multiscale:  true, detect_interval: 1, max_drift: 20.0, ms_scales: "0.75,1.0,1.25",
+        zone_enabled: false, zone_overlay: true, zone_margin: 80, sweep_mode: false,
         ms_threshold: 0.3, ms_nms_radius: 12, overlay_style: "boxes", box_size:  14,
         box_thickness: 2, stream_fps:  30, stream_bitrate:  "2500k", stream_codec: "libx264",
         stream_preset: "ultrafast", queue_size: 2, gpu_id: "0",
@@ -481,6 +516,7 @@ function getDefaultPresets() {
       settings: {
         mode: "traffic", scale: 0.75, threshold: 0.28, fp16: true, track:  true,
         multiscale: true, detect_interval: 10, max_drift: 25.0, ms_scales: "0.5,0.75,1.0,1.25",
+        zone_enabled: true, zone_overlay: true, zone_margin: 80, sweep_mode: true,
         ms_threshold: 0.28, ms_nms_radius: 12, overlay_style: "boxes", box_size:  14,
         box_thickness: 2, stream_fps:  30, stream_bitrate:  "2500k", stream_codec: "libx264",
         stream_preset: "ultrafast", queue_size: 2, gpu_id: "0",
@@ -671,6 +707,18 @@ function applySettingsToUI(s) {
   if (cc.gpuId && s.gpu_id !== undefined) {
     cc.gpuId.value = s.gpu_id;
   }
+  if (cc.zoneEnabled && s.zone_enabled !== undefined) {
+    cc.zoneEnabled.checked = !!s.zone_enabled;
+  }
+  if (cc.zoneOverlay && s.zone_overlay !== undefined) {
+    cc.zoneOverlay.checked = !!s.zone_overlay;
+  }
+  if (cc.zoneMargin && s.zone_margin !== undefined) {
+    cc.zoneMargin.value = s.zone_margin;
+  }
+  if (cc.sweepMode && s.sweep_mode !== undefined) {
+    cc.sweepMode.checked = !!s.sweep_mode;
+  }
 }
 
 // =============================================================================
@@ -696,13 +744,17 @@ function collectSettings() {
   if (cc.msNmsRadius) s.ms_nms_radius = parseInt(cc.msNmsRadius. value);
   if (cc.detectInterval) s.detect_interval = parseInt(cc.detectInterval. value);
   if (cc.maxDrift) s.max_drift = parseFloat(cc.maxDrift.value);
+  if (cc.zoneEnabled) s.zone_enabled = cc.zoneEnabled.checked;
+  if (cc.zoneOverlay) s.zone_overlay = cc.zoneOverlay.checked;
+  if (cc.zoneMargin) s.zone_margin = parseInt(cc.zoneMargin.value);
+  if (cc.sweepMode) s.sweep_mode = cc.sweepMode.checked;
   if (cc.overlayStyle) s.overlay_style = cc.overlayStyle.value;
   if (cc.boxSize) s.box_size = parseInt(cc. boxSize.value);
   if (cc.boxThickness) s.box_thickness = parseInt(cc.boxThickness.value);
   if (cc.queueSize) s.queue_size = parseInt(cc.queueSize.value);
   if (cc.gpuId) s.gpu_id = cc.gpuId.value;
   if (cc.out && cc.out.value) s.out = cc.out.value;
-  if (cc.showPreview) s.show = cc.showPreview.checked;
+  if (cc.showPreview) s.show = cc.showPreview.checked || s.zone_enabled;
   return s;
 }
 
@@ -815,13 +867,33 @@ function updateStatus(status) {
 }
 
 function updateStats(stats) {
-  ccState.count = stats.count;
+  ccState.rawCount = stats.total !== undefined && stats.total !== null ? stats.total : stats.count;
+  ccState.count = ccState.rawCount + ccState.manualCorrection;
   ccState.fps = stats.fps;
-  ccState.mode = stats.mode;
+  ccState.mode = stats.mode || (stats.total !== undefined ? "SWEEP" : "DET");
 
-  if (cc.count) cc.count.textContent = stats.count;
+  if (cc.count) cc.count.textContent = ccState.count;
   if (cc.fpsValue) cc.fpsValue.textContent = stats.fps;
-  if (cc.modeValue) cc.modeValue.textContent = stats.mode;
+  if (cc.modeValue) cc.modeValue.textContent = ccState.mode;
+}
+
+function setManualCorrection(value) {
+  ccState.manualCorrection = value;
+  ccState.count = ccState.rawCount + ccState.manualCorrection;
+
+  if (cc.count) {
+    cc.count.textContent = ccState.count;
+  }
+  if (cc.correctionValue) {
+    cc.correctionValue.textContent =
+      ccState.manualCorrection >= 0 ? "+" + ccState.manualCorrection : String(ccState.manualCorrection);
+  }
+
+  addLog("info", "Manual correction: " + ccState.manualCorrection);
+}
+
+function adjustManualCorrection(delta) {
+  setManualCorrection(ccState.manualCorrection + delta);
 }
 
 function markPendingChanges() {

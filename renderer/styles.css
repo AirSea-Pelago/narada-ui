@@ -1643,6 +1643,56 @@ select.form-control {
   color:var(--danger) !important;
 }
 
+.cc-correction-control {
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:7px;
+  min-width:170px;
+  padding:10px 14px;
+  background:rgba(0, 0, 0, 0.2);
+  border:1px solid rgba(255, 255, 255, 0.08);
+  border-radius:8px;
+}
+
+.cc-correction-label {
+  font-size:10px;
+  color:rgba(255, 255, 255, 0.6);
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+}
+
+.cc-correction-row {
+  display:flex;
+  align-items:center;
+  gap:7px;
+}
+
+.cc-correction-btn {
+  width:30px;
+  height:30px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border:none;
+  border-radius:6px;
+  background:rgba(255, 255, 255, 0.08);
+  color:white;
+  cursor:pointer;
+}
+
+.cc-correction-btn:hover {
+  background:rgba(59, 130, 246, 0.45);
+}
+
+.cc-correction-value {
+  min-width:38px;
+  text-align:center;
+  font-size:15px;
+  font-weight:700;
+  color:white;
+}
+
 /* Power Button */
 .cc-power-control {
   margin-left:auto;

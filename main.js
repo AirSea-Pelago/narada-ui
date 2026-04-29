@@ -217,8 +217,8 @@ function startCrowdCounter(config) {
   const args = [
     paths.script,
     "--pre", paths.model,
-    "--source", "rtmp://localhost:1935/drone",
-    "--stream_out", "rtmp://localhost:1935/live",
+    "--source", "rtmp://localhost:1935/matrice4t",
+    "--stream_out", "rtmp://localhost:1935/cognitiveOutput",
     "--json_output",
   ];
 
@@ -252,6 +252,18 @@ function startCrowdCounter(config) {
   }
   if (config.max_drift !== undefined) {
     args.push("--max_drift", config.max_drift.toString());
+  }
+  if (config.zone_enabled !== undefined) {
+    args.push("--zone_enabled", config.zone_enabled ? "True" : "False");
+  }
+  if (config.zone_overlay !== undefined) {
+    args.push("--zone_overlay", config.zone_overlay ? "True" : "False");
+  }
+  if (config.zone_margin !== undefined) {
+    args.push("--zone_margin", config.zone_margin.toString());
+  }
+  if (config.sweep_mode !== undefined) {
+    args.push("--sweep_mode", config.sweep_mode ? "True" : "False");
   }
   if (config.ms_scales) {
     args.push("--ms_scales", config. ms_scales);
@@ -301,6 +313,14 @@ function startCrowdCounter(config) {
   console.log("[Main] Crowd Counter args:", args. join(" "));
 
   try {
+    const pythonDir = path.dirname(paths.python);
+    const pythonPathEntries = [
+      pythonDir,
+      path.join(pythonDir, "Scripts"),
+      path.join(pythonDir, "Library", "bin"),
+      process.env.PATH || "",
+    ];
+
     crowdCounterProcess = spawn(paths.python, args, {
       cwd: paths.cwd,
       stdio: ["ignore", "pipe", "pipe"],
@@ -308,6 +328,7 @@ function startCrowdCounter(config) {
         ...process.env,
         PYTHONPATH:  paths.cwd,
         PYTHONUNBUFFERED:  "1",
+        PATH: pythonPathEntries.join(path.delimiter),
       },
     });
 
@@ -474,6 +495,10 @@ function getBuiltInPresets() {
         multiscale: false,
         detect_interval: 2,
         max_drift: 20.0,
+        zone_enabled: false,
+        zone_overlay: true,
+        zone_margin: 80,
+        sweep_mode: false,
         ms_scales:  "1.0",
         ms_threshold:  0.39,
         ms_nms_radius: 12,
@@ -502,6 +527,10 @@ function getBuiltInPresets() {
         multiscale: true,
         detect_interval: 2,
         max_drift: 20.0,
+        zone_enabled: false,
+        zone_overlay: true,
+        zone_margin: 80,
+        sweep_mode: false,
         ms_scales:  "0.75,1.0,1.25",
         ms_threshold: 0.30,
         ms_nms_radius: 12,
@@ -530,6 +559,10 @@ function getBuiltInPresets() {
         multiscale: true,
         detect_interval: 10,
         max_drift: 25.0,
+        zone_enabled: true,
+        zone_overlay: true,
+        zone_margin: 80,
+        sweep_mode: true,
         ms_scales: "0.5,0.75,1.0,1.25",
         ms_threshold: 0.28,
         ms_nms_radius: 12,
