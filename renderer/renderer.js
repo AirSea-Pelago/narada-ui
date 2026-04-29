@@ -542,8 +542,37 @@ async function handleAddStream(event) {
   }
 
   try {
+    const extractStreamPath = (streamUrl) => {
+      if (!streamUrl) return "";
+
+      const withoutScheme = streamUrl.replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, "");
+      const firstSlash = withoutScheme.indexOf("/");
+      if (firstSlash === -1) return "";
+
+      return withoutScheme.slice(firstSlash + 1).replace(/^\/+|\/+$/g, "");
+    };
+
+    const deriveStreamName = (displayName, streamType, streamUrl) => {
+      if (streamType !== "webrtc") {
+        try {
+          const parsed = new URL(streamUrl);
+          const pathName = parsed.pathname.replace(/^\/+|\/+$/g, "");
+          if (pathName) {
+            return pathName;
+          }
+        } catch (err) {
+          // Keep fallback below when URL parsing fails.
+        }
+      }
+
+      return displayName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "");
+    };
+
     const streamConfig = {
-      name: name.toLowerCase().replace(/\s+/g, "_"),
+      name: deriveStreamName(name, type, url),
       displayName: name,
       type: type,
       url: url,

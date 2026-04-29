@@ -410,7 +410,7 @@ class VideoStreamPlayer {
       } else {
         // Untuk HLS/RTSP/RTMP, gunakan electronAPI untuk get URL
         const streamUrls = await window.electronAPI.getStreamUrl(
-          this.streamConfig.name
+          this.streamConfig
         );
 
         if (this.streamConfig.type === "hls") {
@@ -1039,6 +1039,31 @@ class StreamManager {
     const result = await window.electronAPI.loadStreamConfig();
     if (result.success && result.config) {
       this.streams = result.config;
+
+      // Normalize saved stream names to match URL paths for non-WebRTC streams.
+      let hasMigration = false;
+      this.streams = this.streams.map((stream) => {
+        if (!stream || stream.type === "webrtc" || !stream.url) {
+          return stream;
+        }
+
+        try {
+          const parsed = new URL(stream.url);
+          const pathName = parsed.pathname.replace(/^\/+|\/+$/g, "");
+          if (pathName && stream.name !== pathName) {
+            hasMigration = true;
+            return { ...stream, name: pathName };
+          }
+        } catch (error) {
+          // Keep stream unchanged when URL parsing fails.
+        }
+
+        return stream;
+      });
+
+      if (hasMigration) {
+        await this.saveConfig();
+      }
     }
 
     if (this.streams.length === 0) {
@@ -1054,18 +1079,18 @@ class StreamManager {
       {
         id: "1",
         name: "ai_view",
-        displayName: "Drone Live (WebRTC)",
-        type: "webrtc",
-        url: "http://localhost:8889/live",
+        displayName: "Drone Live (RTSP)",
+        type: "rtsp",
+        url: "rtsp://localhost:8554/live",
         enabled: true,
         position: 1,
       },
       {
         id: "2",
-        name: "drone_webrtc",
-        displayName: "Drone Live (WebRTC)",
-        type: "webrtc",
-        url: "http://localhost:8889/drone",
+        name: "drone_rtsp",
+        displayName: "Drone Live (RTSP)",
+        type: "rtsp",
+        url: "rtsp://localhost:8554/drone",
         enabled: true,
         position: 2,
       },

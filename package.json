@@ -20,57 +20,49 @@
     },
     "files": [
       "**/*",
-      "! node_modules",
-      "! dist",
+      "!node_modules",
+      "!dist",
       "!build",
       "!src",
       "!.gitignore",
       "!*.md",
       "!python/**",
       "!crowd_counter/**",
-      "! scripts/**"
+      "!scripts/**",
+      "!mediamtx/**",
+      "!generate-license.py",
+      "!license-checker.py"
     ],
     "extraResources": [
       {
         "from": "mediamtx/",
         "to": "mediamtx/",
-        "filter": [
-          "**/*"
-        ]
+        "filter": ["**/*"]
       },
       {
         "from": "assets/",
         "to": "assets/",
-        "filter": [
-          "**/*"
-        ]
+        "filter": ["**/*"]
       },
       {
         "from": "python/",
         "to": "python/",
-        "filter": [
-          "**/*"
-        ]
+        "filter": ["**/*"]
       },
       {
         "from": "crowd_counter/",
-        "to":  "crowd_counter/",
+        "to": "crowd_counter/",
         "filter": [
           "**/*",
           "!venv/**",
           "!__pycache__/**",
-          "!*. pyc",
-          "!*. pyo",
-          "!. git/**"
+          "!*.pyc",
+          "!*.pyo",
+          "!.git/**"
         ]
       },
       "license-checker.py",
       "generate-license.py"
-    ],
-    "asarUnpack": [
-      "python/**/*",
-      "crowd_counter/**/*",
-      "mediamtx/**/*"
     ],
     "win": {
       "target": [

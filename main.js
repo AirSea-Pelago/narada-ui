@@ -92,15 +92,46 @@ function getAppPaths() {
 
 function getMediaMTXPath() {
   const paths = getAppPaths();
-  const mediamtxDir = paths.mediamtxDir;
 
-  let mediamtxExe;
-  if (process.platform === "win32") {
-    mediamtxExe = path.join(mediamtxDir, "mediamtx.exe");
-  } else if (process.platform === "darwin") {
-    mediamtxExe = path.join(mediamtxDir, "mediamtx");
-  } else {
-    mediamtxExe = path.join(mediamtxDir, "mediamtx");
+  // In a packaged build, mediamtx can live in one of two places depending on
+  // the electron-builder config used:
+  //   1. extraResources  → <resources>/mediamtx/mediamtx.exe   (preferred)
+  //   2. asarUnpack      → <resources>/app.asar.unpacked/mediamtx/mediamtx.exe
+  //
+  // We try both so either config works.
+  const exeName = process.platform === "win32" ? "mediamtx.exe" : "mediamtx";
+
+  const candidates = [
+    // Primary: extraResources location (directly under resources/)
+    path.join(paths.mediamtxDir, exeName),
+  ];
+
+  if (app.isPackaged) {
+    // Secondary: asarUnpack location
+    const unpackedDir = path.join(
+      process.resourcesPath,
+      "app.asar.unpacked",
+      "mediamtx"
+    );
+    candidates.push(path.join(unpackedDir, exeName));
+  }
+
+  // Pick the first path that actually exists on disk
+  let mediamtxExe = candidates[0];
+  let mediamtxDir = path.dirname(mediamtxExe);
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      mediamtxExe = candidate;
+      mediamtxDir = path.dirname(candidate);
+      console.log(`[Main] MediaMTX found at: ${mediamtxExe}`);
+      break;
+    }
+  }
+
+  if (!fs.existsSync(mediamtxExe)) {
+    console.error("[Main] MediaMTX not found. Searched:");
+    candidates.forEach((c) => console.error("  -", c));
   }
 
   return { mediamtxDir, mediamtxExe };
@@ -592,6 +623,7 @@ paths:
     mediamtxProcess = spawn(mediamtxExe, [configPath], {
       cwd: mediamtxDir,
       stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,   // prevent black console window flashing on Windows
     });
 
     console.log(`[Main] MediaMTX started with PID: ${mediamtxProcess.pid}`);
@@ -1201,18 +1233,28 @@ ipcMain.handle("check-license", async () => {
     const python = spawn(pythonExe, [pythonScript], { windowsHide: true });
 
     let dataString = "";
+    let stderrString = "";
 
     python.stdout.on("data", (data) => {
       dataString += data.toString();
     });
 
+    python.stderr.on("data", (data) => {
+      stderrString += data.toString();
+      console.error(`[Main] IPC: Python stderr: ${data}`);
+    });
+
     python.on("close", (code) => {
       const trimmed = dataString.trim();
       if (!trimmed) {
-        console.error(`[Main] IPC: Python produced no output (exit ${code})`);
+        // Include stderr in message to help diagnose missing modules, etc.
+        const detail = stderrString.trim()
+          ? stderrString.trim().split("\n").pop()   // last line of stderr
+          : `exit ${code}`;
+        console.error(`[Main] IPC: Python produced no output. stderr: ${stderrString}`);
         resolve({
           valid: false,
-          message: `License check failed: Python script produced no output (exit ${code})`,
+          message: `License check failed: ${detail}`,
         });
         return;
       }
@@ -1265,15 +1307,50 @@ ipcMain.handle("control-mediamtx", async (event, action) => {
 // IPC HANDLERS - STREAMS
 // =============================================================================
 
-ipcMain.handle("get-stream-url", async (event, streamName) => {
+ipcMain.handle("get-stream-url", async (event, streamInput) => {
   const baseUrlHls = "http://localhost:8888";
   const baseUrlRtsp = "rtsp://localhost:8554";
   const baseUrlRtmp = "rtmp://localhost:1935";
 
+  // Accept both legacy string input and richer object input from renderer.
+  const stream =
+    typeof streamInput === "string"
+      ? { name: streamInput }
+      : streamInput || {};
+
+  const explicitHlsUrl = (stream.hlsUrl || stream.hls || "").trim();
+  const explicitHlsPath = (stream.hlsPath || stream.path || "").trim();
+  const streamName = (stream.name || "").trim();
+  const sourceUrl = (stream.url || "").trim();
+
+  if (explicitHlsUrl.startsWith("http://") || explicitHlsUrl.startsWith("https://")) {
+    return {
+      hls: explicitHlsUrl,
+      rtsp: sourceUrl || `${baseUrlRtsp}/${streamName}`,
+      rtmp: sourceUrl || `${baseUrlRtmp}/${streamName}`,
+    };
+  }
+
+  let streamPath = explicitHlsPath || streamName;
+
+  if (!explicitHlsPath && sourceUrl) {
+    try {
+      const parsed = new URL(sourceUrl);
+      const fromUrlPath = parsed.pathname.replace(/^\/+|\/+$/g, "");
+      if (fromUrlPath) {
+        streamPath = fromUrlPath;
+      }
+    } catch (error) {
+      // Keep fallback value when sourceUrl is not a valid URL.
+    }
+  }
+
+  streamPath = streamPath.replace(/^\/+|\/+$/g, "");
+
   return {
-    hls: `${baseUrlHls}/${streamName}/index.m3u8`,
-    rtsp: `${baseUrlRtsp}/${streamName}`,
-    rtmp: `${baseUrlRtmp}/${streamName}`,
+    hls: `${baseUrlHls}/${streamPath}/index.m3u8`,
+    rtsp: sourceUrl || `${baseUrlRtsp}/${streamPath}`,
+    rtmp: sourceUrl || `${baseUrlRtmp}/${streamPath}`,
   };
 });
 
