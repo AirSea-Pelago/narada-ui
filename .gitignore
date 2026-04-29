@@ -1,6 +1,6 @@
 node_modules/
 dist/
-crowd_counter/
+crowd_counter/models/
 python/
 python-embed.zip
 crowd-python-embed.zip
