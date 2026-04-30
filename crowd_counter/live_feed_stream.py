@@ -8,11 +8,34 @@ but different argument names, so this wrapper translates the UI contract.
 """
 
 import argparse
+import importlib.util
 import json
 import os
 import sys
 
-from live_feed_sweep import main as sweep_main
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
+
+
+def load_sweep_main():
+    try:
+        from live_feed_sweep import main
+        return main
+    except ModuleNotFoundError:
+        sweep_path = os.path.join(SCRIPT_DIR, "live_feed_sweep.py")
+        if not os.path.exists(sweep_path):
+            raise ModuleNotFoundError(
+                "live_feed_sweep.py is missing from the crowd_counter folder. "
+                "Make sure it was committed/pulled or included in the packaged resources."
+            )
+        spec = importlib.util.spec_from_file_location("live_feed_sweep", sweep_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.main
+
+
+sweep_main = load_sweep_main()
 
 
 def emit_status(running, message, error=False):
