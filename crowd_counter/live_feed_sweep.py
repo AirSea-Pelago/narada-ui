@@ -71,9 +71,9 @@ PRESETS = {
     },
     "sweep": {
         "description": "For sweeping large crowds",
-        "scale": 0.7,
-        "threshold": 0.35,
-        "nms_kernel": 25,
+        "scale": 0.55,
+        "threshold": 0.28,
+        "nms_kernel": 11,
     },
 }
 
@@ -416,9 +416,18 @@ class ImprovedSweepTracker:
         self.min_hits = min_hits
         self.grid_size = grid_size
         self.reappear_threshold = reappear_threshold
+        self.memory_age = max_lost_age * 6
+        self.duplicate_radius = max(20, min(max_distance * 1.25, reappear_threshold * 0.6))
         
         self.tracks = []
         self.lost_tracks = []
+        self.counted_ids = set()
+        self.baseline_ids = set()
+        self.entry_counted_ids = set()
+        self.track_memory = {}
+        self.baseline_locked = False
+        self.baseline_count = 0
+        self.baseline_warmup_frames = max(8, min_hits * 3)
         self.next_id = 0
         self.total_unique = 0
         self.frame_count = 0
@@ -427,6 +436,12 @@ class ImprovedSweepTracker:
     def reset(self):
         self.tracks = []
         self.lost_tracks = []
+        self.counted_ids = set()
+        self.baseline_ids = set()
+        self.entry_counted_ids = set()
+        self.track_memory = {}
+        self.baseline_locked = False
+        self.baseline_count = 0
         self.next_id = 0
         self.total_unique = 0
         self.frame_count = 0
@@ -438,12 +453,13 @@ class ImprovedSweepTracker:
     
     def _check_grid_history(self, x, y):
         cell = self._get_grid_cell(x, y)
+        candidates = []
         for dx in [-1, 0, 1]:
             for dy in [-1, 0, 1]: 
                 neighbor = (cell[0] + dx, cell[1] + dy)
                 if neighbor in self.grid_history:
-                    return self.grid_history[neighbor]
-        return None
+                    candidates.extend(self.grid_history[neighbor])
+        return candidates
     
     def _update_grid(self, track_id, x, y):
         cell = self._get_grid_cell(x, y)
@@ -453,6 +469,15 @@ class ImprovedSweepTracker:
             self.grid_history[cell].append(track_id)
             if len(self.grid_history[cell]) > 5:
                 self.grid_history[cell].pop(0)
+
+    def _remember_track(self, track):
+        self.track_memory[track['id']] = {
+            'id': track['id'],
+            'pos': track['pos'].copy(),
+            'velocity': track.get('velocity', np.zeros(2, dtype=np.float32)).copy(),
+            'last_seen': self.frame_count,
+            'created_frame': track.get('created_frame', self.frame_count),
+        }
     
     def _cleanup_grid_history(self):
         """Periodically clean up old grid history to prevent memory leak."""
@@ -464,9 +489,17 @@ class ImprovedSweepTracker:
                                  key=lambda x: max(x[1]) if x[1] else 0, 
                                  reverse=True)
             self.grid_history = dict(sorted_cells[:500])
+
+        min_frame = self.frame_count - self.memory_age
+        self.track_memory = {
+            track_id: memory
+            for track_id, memory in self.track_memory.items()
+            if memory.get('last_seen', 0) >= min_frame
+        }
     
-    def update(self, points, frame_shape=None):
+    def update(self, points, frame_shape=None, zone_rect=None):
         self.frame_count += 1
+        self.zone_rect = zone_rect
         
         # Periodic cleanup to prevent memory leak
         if self.frame_count % 1000 == 0:
@@ -491,89 +524,375 @@ class ImprovedSweepTracker:
         
         for det_idx, trk_idx in zip(matched_det, matched_trk):
             t = self.tracks[trk_idx]
+            previous_pos = t['pos'].copy()
             t['pos'] = points[det_idx].copy()
+            t['velocity'] = 0.7 * t.get('velocity', np.zeros(2, dtype=np.float32)) + 0.3 * (t['pos'] - previous_pos)
             t['hits'] += 1
             t['time_since_update'] = 0
-            if t['state'] == 'tentative' and t['hits'] >= self.min_hits:
-                t['state'] = 'confirmed'
+            self._update_zone_state(t)
+            self._promote_track_if_ready(t)
             self._update_grid(t['id'], t['pos'][0], t['pos'][1])
+            self._remember_track(t)
         
         if len(unmatched_det) > 0 and len(self.lost_tracks) > 0:
             rematched_det, rematched_lost = self._match_lost(points, unmatched_det)
             
             for det_idx, lost_idx in zip(rematched_det, rematched_lost):
                 t = self.lost_tracks[lost_idx]
+                previous_pos = t['pos'].copy()
                 t['pos'] = points[det_idx].copy()
+                t['velocity'] = 0.6 * t.get('velocity', np.zeros(2, dtype=np.float32)) + 0.4 * (t['pos'] - previous_pos)
                 t['hits'] += 1
                 t['time_since_update'] = 0
+                t['lost_age'] = 0
                 t['state'] = 'confirmed'
+                self._update_zone_state(t)
                 self.tracks.append(t)
                 self._update_grid(t['id'], t['pos'][0], t['pos'][1])
+                self._remember_track(t)
                 unmatched_det.remove(det_idx)
             
             for lost_idx in sorted(rematched_lost, reverse=True):
                 self.lost_tracks.pop(lost_idx)
         
+        if len(unmatched_det) > 0 and len(self.track_memory) > 0:
+            rematched_det, remembered_ids = self._match_memory(points, unmatched_det)
+            for det_idx, remembered_id in zip(rematched_det, remembered_ids):
+                memory = self.track_memory[remembered_id]
+                self._create_track(
+                    points[det_idx],
+                    state='confirmed',
+                    hits=self.min_hits,
+                    track_id=remembered_id,
+                    velocity=memory.get('velocity'),
+                )
+                self._update_zone_state(self.tracks[-1])
+                unmatched_det.remove(det_idx)
+
+        for det_idx in list(unmatched_det):
+            pt = points[det_idx]
+            recent = self._check_grid_history(pt[0], pt[1])
+            resurrected_id = self._find_recent_counted_id(pt, recent)
+            if resurrected_id is not None:
+                memory = self.track_memory.get(resurrected_id, {})
+                self._create_track(
+                    pt,
+                    state='confirmed',
+                    hits=self.min_hits,
+                    track_id=resurrected_id,
+                    velocity=memory.get('velocity'),
+                )
+                self._update_zone_state(self.tracks[-1])
+                unmatched_det.remove(det_idx)
+
         for det_idx in unmatched_det:
             pt = points[det_idx]
             recent = self._check_grid_history(pt[0], pt[1])
-            self._create_track(pt, is_potential_reappear=(recent is not None))
+            duplicate_owner, _ = self._nearest_occupied_id(
+                pt,
+                include_unconfirmed=True,
+                created_frame=self.frame_count,
+            )
+            self._create_track(
+                pt,
+                is_potential_reappear=bool(recent),
+                state='suppressed' if duplicate_owner is not None else 'tentative',
+                duplicate_of=duplicate_owner,
+                count_suppressed=duplicate_owner is not None,
+            )
+            self._update_zone_state(self.tracks[-1])
         
         self._move_to_lost()
         return self._get_results()
+
+    def _point_in_zone(self, point):
+        if not getattr(self, 'zone_rect', None):
+            return True
+        x1, y1, x2, y2 = self.zone_rect
+        return x1 <= point[0] <= x2 and y1 <= point[1] <= y2
+
+    def _zone_side(self, point):
+        if not getattr(self, 'zone_rect', None):
+            return 'inside'
+        x1, y1, x2, y2 = self.zone_rect
+        x, y = point
+        if x < x1:
+            return 'left'
+        if x > x2:
+            return 'right'
+        if y < y1:
+            return 'top'
+        if y > y2:
+            return 'bottom'
+        return 'inside'
+
+    def _update_zone_state(self, track):
+        inside = self._point_in_zone(track['pos'])
+        side = self._zone_side(track['pos'])
+        previous_inside = track.get('zone_inside', False)
+        previous_side = track.get('zone_last_side')
+
+        if inside:
+            track['zone_hits'] = track.get('zone_hits', 0) + 1
+            track['zone_seen_inside'] = True
+            if not previous_inside:
+                track['zone_entry_side'] = previous_side if previous_side and previous_side != 'inside' else track.get('zone_entry_side')
+                track['zone_enter_frame'] = self.frame_count
+        elif previous_inside and track.get('zone_seen_inside'):
+            track['zone_exit_side'] = side
+            track['zone_exit_frame'] = self.frame_count
+
+        track['zone_inside'] = inside
+        track['zone_last_side'] = side
+        self._count_if_entered_zone(track)
+
+    def _count_if_entered_zone(self, track):
+        if not self.baseline_locked:
+            return
+        if track['id'] in self.baseline_ids or track['id'] in self.entry_counted_ids:
+            return
+        if track.get('state') != 'confirmed' or not track.get('zone_inside'):
+            return
+        if track.get('zone_hits', 0) < self.min_hits:
+            return
+        entry_side = track.get('zone_entry_side')
+        if getattr(self, 'zone_rect', None) and (not entry_side or entry_side == 'inside'):
+            return
+        duplicate_owner, _ = self._nearest_occupied_id(
+            track['pos'],
+            exclude_id=track['id'],
+            include_unconfirmed=False,
+            created_frame=track.get('created_frame'),
+        )
+        if duplicate_owner is not None:
+            return
+
+        self.entry_counted_ids.add(track['id'])
+        self.counted_ids.add(track['id'])
+        track['zone_counted'] = True
     
     def _match_active(self, points):
         if len(self.tracks) == 0:
             return [], [], list(range(len(points)))
         
-        track_positions = np.array([t['pos'] for t in self.tracks])
-        matched_det, matched_trk = [], []
-        unmatched_det = list(range(len(points)))
-        used_trks = set()
-        
-        for i, pt in enumerate(points):
+        track_positions = np.array([
+            t['pos'] + t.get('velocity', np.zeros(2, dtype=np.float32)) * max(1, t['time_since_update'])
+            for t in self.tracks
+        ])
+        candidate_pairs = []
+        for det_idx, pt in enumerate(points):
             dists = np.linalg.norm(track_positions - pt, axis=1)
-            for j in np.argsort(dists):
-                if j in used_trks:
-                    continue
-                if dists[j] <= self.max_distance:
-                    matched_det.append(i)
-                    matched_trk.append(j)
-                    used_trks.add(j)
-                    unmatched_det.remove(i)
-                    break
+            for trk_idx, dist in enumerate(dists):
+                gate = self._active_gate(self.tracks[trk_idx])
+                if dist <= gate:
+                    candidate_pairs.append((dist, det_idx, trk_idx))
+
+        candidate_pairs.sort(key=lambda item: item[0])
+        matched_det, matched_trk = [], []
+        used_trks = set()
+        used_det = set()
         
+        for _, det_idx, trk_idx in candidate_pairs:
+            if det_idx in used_det or trk_idx in used_trks:
+                continue
+            matched_det.append(det_idx)
+            matched_trk.append(trk_idx)
+            used_det.add(det_idx)
+            used_trks.add(trk_idx)
+        
+        unmatched_det = [i for i in range(len(points)) if i not in used_det]
         return matched_det, matched_trk, unmatched_det
+
+    def _active_gate(self, track):
+        base = self.max_distance
+        if track.get('state') == 'tentative':
+            base *= 0.9
+        elif track.get('state') == 'suppressed':
+            base *= 0.8
+        return base * (1.0 + min(1.2, track['time_since_update'] * 0.2))
+
+    def _nearest_occupied_id(self, point, exclude_id=None, include_unconfirmed=False,
+                             created_frame=None):
+        best_id, best_dist = None, None
+
+        for t in self.tracks:
+            if t['id'] == exclude_id:
+                continue
+            if created_frame is not None and t.get('created_frame') == created_frame:
+                continue
+            if not include_unconfirmed and t['id'] not in self.counted_ids:
+                continue
+            dist = float(np.linalg.norm(t['pos'] - point))
+            if dist <= self.duplicate_radius and (best_dist is None or dist < best_dist):
+                best_id, best_dist = t['id'], dist
+
+        for t in self.lost_tracks:
+            if t['id'] == exclude_id:
+                continue
+            if t['id'] not in self.counted_ids:
+                continue
+            pos = t.get('last_pos', t['pos'])
+            dist = float(np.linalg.norm(pos - point))
+            if dist <= self.duplicate_radius and (best_dist is None or dist < best_dist):
+                best_id, best_dist = t['id'], dist
+
+        for track_id, memory in self.track_memory.items():
+            if track_id == exclude_id or track_id not in self.counted_ids:
+                continue
+            if created_frame is not None and memory.get('created_frame') == created_frame:
+                continue
+            dist = float(np.linalg.norm(memory['pos'] - point))
+            if dist <= self.duplicate_radius and (best_dist is None or dist < best_dist):
+                best_id, best_dist = track_id, dist
+
+        return best_id, best_dist
+
+    def _promote_track_if_ready(self, track):
+        if track.get('state') == 'confirmed' or track.get('hits', 0) < self.min_hits:
+            return
+
+        duplicate_owner, _ = self._nearest_occupied_id(
+            track['pos'],
+            exclude_id=track['id'],
+            include_unconfirmed=False,
+            created_frame=track.get('created_frame'),
+        )
+        if duplicate_owner is not None and not self._suppressed_track_escaped(track):
+            track['state'] = 'suppressed'
+            track['count_suppressed'] = True
+            track['duplicate_of'] = duplicate_owner
+            return
+
+        track['state'] = 'confirmed'
+        track['count_suppressed'] = False
+        track['duplicate_of'] = None
+        self._count_if_entered_zone(track)
+
+    def _suppressed_track_escaped(self, track):
+        origin = track.get('origin_pos')
+        if origin is None:
+            return False
+        displacement = float(np.linalg.norm(track['pos'] - origin))
+        return displacement >= self.duplicate_radius * 1.6
     
     def _match_lost(self, points, unmatched_det_indices):
         if len(self.lost_tracks) == 0 or len(unmatched_det_indices) == 0:
             return [], []
         
-        lost_positions = np.array([t['last_pos'] for t in self.lost_tracks])
+        lost_positions = np.array([
+            t['last_pos'] + t.get('velocity', np.zeros(2, dtype=np.float32)) * max(1, t.get('lost_age', 0))
+            for t in self.lost_tracks
+        ])
         rematched_det, rematched_lost = [], []
         
         for det_idx in unmatched_det_indices:
             pt = points[det_idx]
             dists = np.linalg.norm(lost_positions - pt, axis=1)
-            best_lost = np.argmin(dists)
-            if dists[best_lost] < self.reappear_threshold and best_lost not in rematched_lost:
+            for best_lost in np.argsort(dists):
+                if best_lost in rematched_lost:
+                    continue
+                gate = max(self.reappear_threshold, self.max_distance * 2.5)
+                gate += min(80, self.lost_tracks[best_lost].get('lost_age', 0) * 2)
+                if dists[best_lost] >= gate:
+                    break
                 rematched_det.append(det_idx)
                 rematched_lost.append(best_lost)
+                break
         
         return rematched_det, rematched_lost
+
+    def _find_recent_counted_id(self, point, recent_ids):
+        if not recent_ids:
+            return None
+
+        active_ids = set(t['id'] for t in self.tracks)
+        lost_ids = set(t['id'] for t in self.lost_tracks)
+        best_id, best_dist = None, None
+
+        for track_id in reversed(recent_ids):
+            if track_id not in self.counted_ids:
+                continue
+            if track_id in active_ids or track_id in lost_ids:
+                continue
+            memory = self.track_memory.get(track_id)
+            if not memory:
+                continue
+            age = self.frame_count - memory.get('last_seen', self.frame_count)
+            predicted = memory['pos'] + memory.get('velocity', np.zeros(2, dtype=np.float32)) * max(1, age)
+            dist = float(np.linalg.norm(predicted - point))
+            gate = max(self.reappear_threshold, self.max_distance * 2.0) + min(80, age)
+            if dist <= gate and (best_dist is None or dist < best_dist):
+                best_id, best_dist = track_id, dist
+
+        return best_id
+
+    def _match_memory(self, points, unmatched_det_indices):
+        active_ids = set(t['id'] for t in self.tracks)
+        lost_ids = set(t['id'] for t in self.lost_tracks)
+        memories = [
+            memory for memory in self.track_memory.values()
+            if memory['id'] in self.counted_ids
+            and memory['id'] not in active_ids
+            and memory['id'] not in lost_ids
+        ]
+        if len(memories) == 0 or len(unmatched_det_indices) == 0:
+            return [], []
+
+        memory_positions = np.array([
+            m['pos'] + m.get('velocity', np.zeros(2, dtype=np.float32)) * max(1, self.frame_count - m.get('last_seen', self.frame_count))
+            for m in memories
+        ])
+        rematched_det, remembered_ids, used_memory = [], [], set()
+
+        for det_idx in unmatched_det_indices:
+            pt = points[det_idx]
+            dists = np.linalg.norm(memory_positions - pt, axis=1)
+            for memory_idx in np.argsort(dists):
+                if memory_idx in used_memory:
+                    continue
+                memory_age = self.frame_count - memories[memory_idx].get('last_seen', self.frame_count)
+                gate = max(self.reappear_threshold, self.max_distance * 3.0) + min(120, memory_age * 1.5)
+                if dists[memory_idx] >= gate:
+                    break
+                rematched_det.append(det_idx)
+                remembered_ids.append(memories[memory_idx]['id'])
+                used_memory.add(memory_idx)
+                break
+
+        return rematched_det, remembered_ids
     
-    def _create_track(self, point, is_potential_reappear=False):
+    def _create_track(self, point, is_potential_reappear=False, state='tentative',
+                      hits=1, track_id=None, velocity=None, duplicate_of=None,
+                      count_suppressed=False):
+        if track_id is None:
+            track_id = self.next_id
+            self.next_id += 1
+        else:
+            self.next_id = max(self.next_id, track_id + 1)
+
         self.tracks.append({
-            'id': self.next_id,
+            'id': track_id,
             'pos': point.copy(),
-            'hits': 1,
+            'velocity': velocity.copy() if velocity is not None else np.zeros(2, dtype=np.float32),
+            'hits': hits,
             'age': 0,
             'time_since_update': 0,
-            'state': 'tentative',
+            'created_frame': self.frame_count,
+            'origin_pos': point.copy(),
+            'zone_inside': False,
+            'zone_seen_inside': False,
+            'zone_entry_side': None,
+            'zone_exit_side': None,
+            'zone_hits': 0,
+            'zone_counted': False,
+            'state': state,
             'is_potential_reappear': is_potential_reappear,
+            'count_suppressed': count_suppressed,
+            'duplicate_of': duplicate_of,
         })
-        self.next_id += 1
-        self._update_grid(self.next_id - 1, point[0], point[1])
+        if state == 'confirmed':
+            self._count_if_entered_zone(self.tracks[-1])
+        self._update_grid(track_id, point[0], point[1])
     
     def _move_to_lost(self):
         still_active = []
@@ -583,24 +902,56 @@ class ImprovedSweepTracker:
                     t['lost_age'] = 0
                     t['last_pos'] = t['pos'].copy()
                     self.lost_tracks.append(t)
+                    self._remember_track(t)
             else:
                 still_active.append(t)
         self.tracks = still_active
     
     def _get_results(self):
         confirmed = [t for t in self.tracks if t['state'] == 'confirmed']
-        confirmed_ids = set(t['id'] for t in self.tracks if t['state'] == 'confirmed')
-        confirmed_ids.update(t['id'] for t in self.lost_tracks)
-        
-        self.total_unique = len(confirmed_ids)
-        positions = np.array([t['pos'] for t in confirmed]) if confirmed else np.array([])
-        return len(confirmed), self.total_unique, positions
+        viewport_tracks = [t for t in confirmed if self._point_in_zone(t['pos'])]
+        self._update_baseline(viewport_tracks)
+        for t in viewport_tracks:
+            self._count_if_entered_zone(t)
+
+        self.total_unique = self.baseline_count + len(self.entry_counted_ids)
+        positions = np.array([t['pos'] for t in viewport_tracks]) if viewport_tracks else np.array([])
+        return len(viewport_tracks), self.total_unique, positions
+
+    def _update_baseline(self, viewport_tracks):
+        if self.baseline_locked:
+            return
+
+        stable_tracks = [
+            t for t in viewport_tracks
+            if t.get('hits', 0) >= self.min_hits
+            and not t.get('count_suppressed')
+        ]
+        stable_ids = set(t['id'] for t in stable_tracks)
+        stable_count = len(stable_ids)
+
+        if self.frame_count < self.baseline_warmup_frames:
+            self.baseline_count = max(self.baseline_count, stable_count)
+            self.baseline_ids = stable_ids
+            self.total_unique = self.baseline_count
+            return
+
+        self.baseline_count = stable_count
+        self.baseline_ids = stable_ids
+        self.baseline_locked = True
+        self.counted_ids.update(stable_ids)
     
     def get_debug_info(self):
         return {
             'active':  len(self.tracks),
             'confirmed': len([t for t in self.tracks if t['state'] == 'confirmed']),
+            'suppressed': len([t for t in self.tracks if t['state'] == 'suppressed']),
+            'tentative': len([t for t in self.tracks if t['state'] == 'tentative']),
             'lost': len(self.lost_tracks),
+            'remembered': len(self.track_memory),
+            'baseline_locked': self.baseline_locked,
+            'baseline_count': self.baseline_count,
+            'entries': len(self.entry_counted_ids),
             'total_unique': self.total_unique,
         }
 
@@ -875,7 +1226,27 @@ def apply_zone_rect(zone, zone_rect_norm, frame_w, frame_h):
     zone._normalize_rect()
 
 
-def apply_control_messages(control_q, zone, frame_w, frame_h, default_margin, show_overlay):
+def filter_points_to_tracking_rect(points, zone_rect, frame_w, frame_h, margin_ratio=0.18):
+    if points is None or len(points) == 0 or not zone_rect:
+        return points
+
+    x1, y1, x2, y2 = zone_rect
+    margin_x = max(30, int((x2 - x1) * margin_ratio))
+    margin_y = max(30, int((y2 - y1) * margin_ratio))
+    rx1 = max(0, x1 - margin_x)
+    ry1 = max(0, y1 - margin_y)
+    rx2 = min(frame_w, x2 + margin_x)
+    ry2 = min(frame_h, y2 + margin_y)
+    mask = (
+        (points[:, 0] >= rx1)
+        & (points[:, 0] <= rx2)
+        & (points[:, 1] >= ry1)
+        & (points[:, 1] <= ry2)
+    )
+    return points[mask]
+
+
+def apply_control_messages(control_q, zone, frame_w, frame_h, default_margin, show_overlay, tracker=None):
     updated = False
 
     while True:
@@ -907,6 +1278,10 @@ def apply_control_messages(control_q, zone, frame_w, frame_h, default_margin, sh
 
         if "zone_overlay" in config:
             show_overlay = parse_bool(config.get("zone_overlay"))
+
+        if parse_bool(config.get("reset_sweep")) and tracker is not None:
+            tracker.reset()
+            print(json.dumps({"type": "log", "message": "Street sweep total reset"}), flush=True)
 
     if updated:
         print(json.dumps({"type": "log", "message": "Counting zone updated"}), flush=True)
@@ -1131,6 +1506,7 @@ def main():
                 src_h,
                 args.zone_margin,
                 show_overlay,
+                tracker,
             )
 
             # Fix: Don't call cap.read() twice - it skips frames!
@@ -1186,14 +1562,17 @@ def main():
                 try:
                     last_count, last_kpoint = run_inference(model, preprocessor, frame, scale, threshold, nms_kernel)
                     
-                    if zone and zone.enabled:
+                    zone_rect = zone.get_rect() if zone and zone.enabled else None
+                    if zone and zone.enabled and not args.sweep:
                         last_kpoint = zone.filter_points(last_kpoint)
                         last_count = int(np.sum(last_kpoint))
                     
                     if tracker: 
                         ys, xs = np.nonzero(last_kpoint)
                         points = np.column_stack((xs, ys)) if len(xs) > 0 else np.array([])
-                        last_viewport, last_total, last_positions = tracker.update(points, frame.shape)
+                        if zone_rect is not None:
+                            points = filter_points_to_tracking_rect(points, zone_rect, src_w, src_h)
+                        last_viewport, last_total, last_positions = tracker.update(points, frame.shape, zone_rect)
                 except Exception as e:
                     print(f"[Error] Inference failed: {e}")
                     # Continue with last known values
@@ -1280,6 +1659,7 @@ def main():
                 if args.sweep:
                     payload["total"] = int(last_total)
                     payload["viewport"] = int(last_viewport)
+                    payload["count"] = int(last_total)
                 print(json.dumps(payload), flush=True)
                 last_stats_time = time.time()
     

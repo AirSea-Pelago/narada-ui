@@ -151,15 +151,14 @@
                 <div id="dashboard-page" class="page-content active">
                     <div class="content-grid">
                         <div class="grid-col-8">
-                            <div class="card">
-                                <!-- <div class="card-header">
-                                    <h3>Streaming Live</h3>
-                                    <div class="card-actions">
-                                        <button class="btn btn-sm btn-primary" onclick="showAddStreamModal()">
-                                            <i class="fas fa-plus"></i> Tambah Stream
+                            <div class="card stream-monitor-card">
+                                <div class="card-header stream-card-header">
+                                    <div class="stream-card-actions">
+                                        <button class="btn btn-primary" id="dashboard-add-stream" title="Add stream" type="button">
+                                            <i class="fas fa-plus"></i> Add Stream
                                         </button>
                                     </div>
-                                </div> -->
+                                </div>
                                 <div class="card-body">
                                     <div class="video-grid" id="video-grid">
                                         <!-- Video streams will be loaded here -->
@@ -172,42 +171,33 @@
                                 </div>
                             </div>
                         </div>
-<!-- Crowd Counter Bottom Panel -->
+
+<!-- Crowd Counter Bottom Panel (Simplified) -->
 <div class="card crowd-counter-panel" id="crowd-counter-panel">
-  
-  <!-- Statistics Container -->
-  <div class="cc-stats-container">
-    <div class="cc-stat-box cc-stat-primary">
-      <span class="cc-stat-value" id="cc-count">0</span>
-      <span class="cc-stat-label">Total Count</span>
+  <div class="cc-panel-heading">
+    <div>
+      <span class="cc-panel-kicker">AI Counter</span>
+      <h3>Counting Controls</h3>
     </div>
-    <div class="cc-stat-box">
-      <span class="cc-stat-value" id="cc-fps-value">0</span>
-      <span class="cc-stat-label">FPS</span>
+    <div class="cc-panel-status-pill">
+      <span class="status-dot"></span>
+      <span id="cc-panel-status-label">Ready</span>
     </div>
-    <div class="cc-stat-box">
-      <span class="cc-stat-value" id="cc-mode-value">DET</span>
-      <span class="cc-stat-label">Mode</span>
-    </div>
-    <div class="cc-stat-box">
-      <span class="cc-stat-value cc-stat-status" id="cc-status-value">Stopped</span>
-      <span class="cc-stat-label">Status</span>
-    </div>
-    <div class="cc-correction-control">
-      <span class="cc-correction-label">Manual Count</span>
-      <div class="cc-correction-row">
-        <span class="cc-correction-value" id="cc-correction-value">0</span>
-        <button class="cc-correction-btn cc-correction-reset" id="cc-correction-reset" title="Clear manual dots">
-          <i class="fas fa-rotate-left"></i>
-        </button>
-      </div>
-    </div>
-    
-    <!-- Power Control -->
-    <div class="cc-power-control">
-      <button class="cc-power-btn" id="cc-toggle-btn" title="Start/Stop">
-        <i class="fas fa-play" id="cc-toggle-icon"></i>
-      </button>
+  </div>
+
+  <div class="cc-counter-state" aria-hidden="true">
+    <span id="cc-count-label">Current</span>
+    <span id="cc-count">0</span>
+    <span id="cc-sweep-total">0</span>
+    <span id="cc-correction-value">0</span>
+    <button id="cc-sweep-reset" type="button"></button>
+    <button id="cc-correction-reset" type="button"></button>
+  </div>
+
+  <!-- Mini Log Wrapper -->
+  <div class="cc-mini-log">
+    <div class="cc-mini-log-content">
+      <span class="cc-mini-log-text" id="cc-mini-log-text">Ready</span>
     </div>
   </div>
 
@@ -217,19 +207,14 @@
       <span class="cc-preset-title">Presets</span>
     </div>
     <div class="cc-preset-buttons" id="cc-preset-buttons">
-      <button class="cc-preset-btn active" data-preset="standard">Standard</button>
-      <button class="cc-preset-btn" data-preset="multiscale">Multiscale</button>
-      <button class="cc-preset-btn" data-preset="traffic">Traffic</button>
-      <button class="cc-preset-btn cc-preset-add" id="cc-add-preset-btn" title="Add Custom Preset">
-        <i class="fas fa-plus"></i>
-      </button>
+      <!-- dynamically filled -->
     </div>
   </div>
 
-  <!-- Basic Settings Container -->
+  <!-- Settings Container (no lock – always editable) -->
   <div class="cc-settings-container" id="cc-settings-container">
     <div class="cc-settings-header">
-      <span class="cc-settings-title">Basic Settings</span>
+      <span class="cc-settings-title">Settings</span>
       <div class="cc-settings-actions">
         <button class="cc-cancel-btn" id="cc-cancel-btn" title="Cancel Changes" style="display: none;">
           <i class="fas fa-times"></i> Cancel
@@ -237,176 +222,109 @@
         <button class="cc-apply-btn-small" id="cc-apply-btn" title="Apply Changes" style="display: none;">
           <i class="fas fa-check"></i> Apply
         </button>
-        <button class="cc-edit-btn" id="cc-edit-btn" title="Edit Settings">
-          <i class="fas fa-lock" id="cc-edit-icon"></i>
-          <span id="cc-edit-text">Locked</span>
-        </button>
       </div>
     </div>
-    
+
     <div class="cc-basic-settings" id="cc-basic-settings">
       <!-- Row 1: Scale and Threshold -->
       <div class="cc-settings-row">
         <div class="cc-setting-item">
           <label class="cc-setting-label">Scale</label>
           <div class="cc-setting-control">
-            <input type="range" id="cc-scale" min="0.2" max="3.0" step="0.05" value="0.5" disabled>
-            <input type="number" id="cc-scale-input" min="0.2" max="3.0" step="0.05" value="0.5" disabled>
+            <input type="range" id="cc-scale" min="0.2" max="3.0" step="0.05" value="0.5">
+            <input type="number" id="cc-scale-input" min="0.2" max="3.0" step="0.05" value="0.5">
           </div>
         </div>
         <div class="cc-setting-item">
           <label class="cc-setting-label">Threshold</label>
           <div class="cc-setting-control">
-            <input type="range" id="cc-threshold" min="0.1" max="0.9" step="0.01" value="0.39" disabled>
-            <input type="number" id="cc-threshold-input" min="0.1" max="0.9" step="0.01" value="0.39" disabled>
+            <input type="range" id="cc-threshold" min="0.1" max="0.9" step="0.01" value="0.39">
+            <input type="number" id="cc-threshold-input" min="0.1" max="0.9" step="0.01" value="0.39">
           </div>
         </div>
       </div>
-      
-      <!-- Row 2: Toggles -->
+
+      <!-- Row 2: AI Source -->
+      <div class="cc-settings-row">
+        <div class="cc-setting-item" style="flex:2;">
+          <label class="cc-setting-label">AI Source</label>
+          <div class="cc-setting-control cc-file-input">
+            <input type="text" id="cc-source-url" value="rtmp://localhost:1935/matrice4t">
+            <button class="btn btn-sm" id="cc-browse-source">Browse</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 3: Toggles -->
       <div class="cc-settings-row">
         <div class="cc-setting-item cc-setting-toggle">
-          <label class="cc-setting-label">Tracking</label>
+          <label class="cc-setting-label">Street Sweep</label>
           <div class="cc-setting-control">
             <label class="cc-switch">
-              <input type="checkbox" id="cc-track" disabled>
+              <input type="checkbox" id="cc-sweep-mode">
               <span class="cc-switch-slider"></span>
             </label>
-            <span class="cc-toggle-status" id="cc-track-status">Off</span>
+            <span class="cc-toggle-status" id="cc-sweep-status">Off</span>
           </div>
         </div>
         <div class="cc-setting-item cc-setting-toggle">
-          <label class="cc-setting-label">Multiscale</label>
+          <label class="cc-setting-label">Zone</label>
           <div class="cc-setting-control">
             <label class="cc-switch">
-              <input type="checkbox" id="cc-multiscale" disabled>
+              <input type="checkbox" id="cc-zone-enabled">
               <span class="cc-switch-slider"></span>
             </label>
-            <span class="cc-toggle-status" id="cc-multiscale-status">Off</span>
+            <span class="cc-toggle-status" id="cc-zone-status">Off</span>
           </div>
         </div>
         <div class="cc-setting-item cc-setting-toggle">
-          <label class="cc-setting-label">FP16 (Faster)</label>
+          <label class="cc-setting-label">Overlay</label>
           <div class="cc-setting-control">
-            <label class="cc-switch">
-              <input type="checkbox" id="cc-fp16" checked disabled>
-              <span class="cc-switch-slider"></span>
-            </label>
-            <span class="cc-toggle-status" id="cc-fp16-status">On</span>
+            <select id="cc-overlay-style">
+              <option value="boxes">Boxes</option>
+              <option value="dots">Dots</option>
+            </select>
           </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Advanced Settings Toggle -->
+  <!-- Expert Settings Toggle -->
   <div class="cc-toggle-row">
-    <span class="cc-toggle-row-label">Advanced Settings</span>
+    <span class="cc-toggle-row-label">Expert Settings</span>
     <label class="cc-switch">
       <input type="checkbox" id="cc-advanced-toggle">
       <span class="cc-switch-slider"></span>
     </label>
   </div>
 
-  <!-- Advanced Settings Container -->
+  <!-- Expert Settings Container -->
   <div class="cc-advanced-container" id="cc-advanced-container" style="display: none;">
-    
-    <!-- Stream Output -->
     <div class="cc-advanced-section">
       <div class="cc-advanced-section-header">
         <i class="fas fa-broadcast-tower"></i>
-        <span>AI Source and Output</span>
+        <span>Stream Output</span>
       </div>
       <div class="cc-advanced-grid">
-        <div class="cc-adv-field cc-adv-field-wide">
-          <label>AI Source</label>
-          <div class="cc-file-input">
-            <input type="text" id="cc-source-url" value="rtmp://localhost:1935/matrice4t" disabled>
-            <button class="btn btn-sm" id="cc-browse-source" disabled>Browse</button>
-          </div>
-        </div>
-        <div class="cc-adv-field cc-adv-field-wide">
-          <label>AI Output</label>
-          <input type="text" id="cc-stream-out" value="rtmp://localhost:1935/cognitiveOutput" disabled>
-        </div>
         <div class="cc-adv-field">
-          <label>FPS</label>
-          <input type="number" id="cc-stream-fps" value="30" min="1" max="60" disabled>
-        </div>
-        <div class="cc-adv-field">
-          <label>Bitrate</label>
-          <input type="text" id="cc-stream-bitrate" value="2500k" disabled>
+          <label>AI Output URL</label>
+          <input type="text" id="cc-stream-out" value="rtmp://localhost:1935/cognitiveOutput">
         </div>
         <div class="cc-adv-field">
           <label>Codec</label>
-          <select id="cc-stream-codec" disabled>
+          <select id="cc-stream-codec">
             <option value="libx264">libx264</option>
             <option value="h264_nvenc">h264_nvenc (NVIDIA)</option>
             <option value="h264_qsv">h264_qsv (Intel)</option>
           </select>
         </div>
         <div class="cc-adv-field">
-          <label>Preset</label>
-          <select id="cc-stream-preset" disabled>
-            <option value="ultrafast">ultrafast</option>
-            <option value="superfast">superfast</option>
-            <option value="veryfast">veryfast</option>
-            <option value="faster">faster</option>
-            <option value="fast">fast</option>
-          </select>
-        </div>
-        <div class="cc-adv-field">
-          <label>Width (0=auto)</label>
-          <input type="number" id="cc-stream-width" value="0" min="0" disabled>
-        </div>
-        <div class="cc-adv-field">
-          <label>Height (0=auto)</label>
-          <input type="number" id="cc-stream-height" value="0" min="0" disabled>
+          <label>Bitrate</label>
+          <input type="text" id="cc-stream-bitrate" value="5000k">
         </div>
       </div>
     </div>
-
-    <!-- Multi-Scale -->
-    <div class="cc-advanced-section">
-      <div class="cc-advanced-section-header">
-        <i class="fas fa-layer-group"></i>
-        <span>Multi-Scale</span>
-      </div>
-      <div class="cc-advanced-grid">
-        <div class="cc-adv-field cc-adv-field-wide">
-          <label>Scales</label>
-          <input type="text" id="cc-ms-scales" value="0.5,0.75,1.0,1.25" disabled>
-        </div>
-        <div class="cc-adv-field">
-          <label>MS Threshold</label>
-          <input type="number" id="cc-ms-threshold" value="0.30" min="0.1" max="0.9" step="0.01" disabled>
-        </div>
-        <div class="cc-adv-field">
-          <label>NMS Radius</label>
-          <input type="number" id="cc-ms-nms-radius" value="12" min="1" max="50" disabled>
-        </div>
-      </div>
-    </div>
-
-    <!-- Tracking -->
-    <div class="cc-advanced-section">
-      <div class="cc-advanced-section-header">
-        <i class="fas fa-crosshairs"></i>
-        <span>Tracking</span>
-      </div>
-      <div class="cc-advanced-grid">
-        <div class="cc-adv-field">
-          <label>Detect Interval</label>
-          <input type="number" id="cc-detect-interval" value="10" min="1" max="60" disabled>
-        </div>
-        <div class="cc-adv-field">
-          <label>Max Drift</label>
-          <input type="number" id="cc-max-drift" value="25.0" min="1" max="100" step="0.5" disabled>
-        </div>
-      </div>
-    </div>
-
-    <!-- Counting Zone -->
     <div class="cc-advanced-section">
       <div class="cc-advanced-section-header">
         <i class="fas fa-vector-square"></i>
@@ -414,34 +332,18 @@
       </div>
       <div class="cc-advanced-grid">
         <div class="cc-adv-field">
-          <label>Enable Zone</label>
-          <label class="cc-switch">
-            <input type="checkbox" id="cc-zone-enabled" disabled>
-            <span class="cc-switch-slider"></span>
-          </label>
-        </div>
-        <div class="cc-adv-field">
           <label>Shade Outside</label>
           <label class="cc-switch">
-            <input type="checkbox" id="cc-zone-overlay" checked disabled>
+            <input type="checkbox" id="cc-zone-overlay" checked>
             <span class="cc-switch-slider"></span>
           </label>
         </div>
         <div class="cc-adv-field">
           <label>Margin</label>
-          <input type="number" id="cc-zone-margin" value="80" min="0" max="500" disabled>
-        </div>
-        <div class="cc-adv-field">
-          <label>Sweep Counter</label>
-          <label class="cc-switch">
-            <input type="checkbox" id="cc-sweep-mode" disabled>
-            <span class="cc-switch-slider"></span>
-          </label>
+          <input type="number" id="cc-zone-margin" value="80" min="0" max="500">
         </div>
       </div>
     </div>
-
-    <!-- Display -->
     <div class="cc-advanced-section">
       <div class="cc-advanced-section-header">
         <i class="fas fa-eye"></i>
@@ -449,61 +351,53 @@
       </div>
       <div class="cc-advanced-grid">
         <div class="cc-adv-field">
-          <label>Overlay Style</label>
-          <select id="cc-overlay-style" disabled>
-            <option value="boxes">Boxes</option>
-            <option value="dots">Dots</option>
-          </select>
-        </div>
-        <div class="cc-adv-field">
           <label>Box Size</label>
-          <input type="number" id="cc-box-size" value="14" min="4" max="50" disabled>
+          <input type="number" id="cc-box-size" value="14" min="4" max="50">
         </div>
         <div class="cc-adv-field">
           <label>Box Thickness</label>
-          <input type="number" id="cc-box-thickness" value="2" min="1" max="10" disabled>
-        </div>
-        <div class="cc-adv-field">
-          <label>Queue Size</label>
-          <input type="number" id="cc-queue-size" value="2" min="1" max="10" disabled>
-        </div>
-      </div>
-    </div>
-
-    <!-- GPU -->
-    <div class="cc-advanced-section">
-      <div class="cc-advanced-section-header">
-        <i class="fas fa-microchip"></i>
-        <span>GPU</span>
-      </div>
-      <div class="cc-advanced-grid">
-        <div class="cc-adv-field">
-          <label>GPU ID</label>
-          <input type="number" id="cc-gpu-id" value="0" min="0" max="7" disabled>
-        </div>
-      </div>
-    </div>
-
-    <!-- Recording -->
-    <div class="cc-advanced-section">
-      <div class="cc-advanced-section-header">
-        <i class="fas fa-record-vinyl"></i>
-        <span>Recording</span>
-      </div>
-      <div class="cc-advanced-grid">
-        <div class="cc-adv-field cc-adv-field-wide">
-          <label>Save to File (optional)</label>
-          <div class="cc-file-input">
-            <input type="text" id="cc-out" placeholder="Leave empty to disable" disabled>
-            <button class="btn btn-sm" id="cc-browse-out" disabled>Browse</button>
-          </div>
+          <input type="number" id="cc-box-thickness" value="2" min="1" max="10">
         </div>
         <div class="cc-adv-field">
           <label>Show Preview</label>
           <label class="cc-switch">
-            <input type="checkbox" id="cc-show-preview" disabled>
+            <input type="checkbox" id="cc-show-preview">
             <span class="cc-switch-slider"></span>
           </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Experimental / Power-user options -->
+    <div class="cc-advanced-section">
+      <div class="cc-advanced-section-header">
+        <i class="fas fa-flask"></i>
+        <span>Experimental</span>
+      </div>
+      <div class="cc-advanced-grid">
+        <div class="cc-adv-field">
+          <label>Stream FPS</label>
+          <input type="number" id="cc-stream-fps" value="24" min="1" max="60">
+        </div>
+        <div class="cc-adv-field">
+          <label>Stream Preset</label>
+          <input type="text" id="cc-stream-preset" value="ultrafast">
+        </div>
+        <div class="cc-adv-field">
+          <label>Queue Size</label>
+          <input type="number" id="cc-queue-size" value="2" min="1" max="10">
+        </div>
+        <div class="cc-adv-field">
+          <label>GPU ID</label>
+          <input type="number" id="cc-gpu-id" value="0" min="0" max="7">
+        </div>
+        <div class="cc-adv-field">
+          <label>Detect Interval</label>
+          <input type="number" id="cc-detect-interval" value="2" min="1" max="60">
+        </div>
+        <div class="cc-adv-field">
+          <label>Max Drift</label>
+          <input type="number" id="cc-max-drift" value="20.0" min="1" max="100" step="0.5">
         </div>
       </div>
     </div>
@@ -534,6 +428,52 @@
     <div class="cc-log-terminal" id="cc-log-terminal"></div>
   </div>
 
+</div>
+<!-- End Crowd Counter Panel -->
+
+<!-- Save Preset Modal (unchanged) -->
+<div class="modal" id="cc-save-preset-modal">
+  <div class="modal-content cc-modal-sm">
+    <div class="modal-header">
+      <h3>Save Custom Preset</h3>
+      <button class="modal-close" id="cc-save-preset-close">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="cc-field">
+        <label>Preset Name</label>
+        <input type="text" id="cc-new-preset-name" placeholder="My Custom Preset">
+      </div>
+      <div class="cc-field">
+        <label>Description (optional)</label>
+        <input type="text" id="cc-new-preset-description" placeholder="Optimized for...">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="cc-save-preset-cancel">Cancel</button>
+      <button class="btn btn-primary" id="cc-save-preset-confirm">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Preset Modal (unchanged) -->
+<div class="modal" id="cc-delete-preset-modal">
+  <div class="modal-content cc-modal-sm">
+    <div class="modal-header">
+      <h3>Delete Preset</h3>
+      <button class="modal-close" id="cc-delete-preset-close">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p>Are you sure you want to delete "<span id="cc-delete-preset-name"></span>"?</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="cc-delete-preset-cancel">Cancel</button>
+      <button class="btn btn-danger" id="cc-delete-preset-confirm">Delete</button>
+    </div>
+  </div>
 </div>
 
 <!-- Save Preset Modal -->
@@ -768,43 +708,49 @@
     <!-- Add Stream Modal with WebRTC option -->
     <div id="add-stream-modal" class="modal">
         <div class="modal-content">
-            <!-- <div class="modal-header">
-                <button class="modal-close" onclick="closeAllModals()">&times;</button>
-            </div> -->
+            <div class="modal-header">
+                <div>
+                    <h3 id="stream-modal-title">Add Stream</h3>
+                    <span class="modal-subtitle">Connect an RTSP, RTMP, HLS, or WebRTC feed</span>
+                </div>
+                <button class="modal-close" type="button" onclick="closeAllModals()" title="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
             <div class="modal-body">
                 <form id="stream-form">
                     <div class="form-group">
-                        <label for="stream-name">Nama Stream</label>
+                        <label for="stream-name">Stream Name</label>
                         <input type="text" id="stream-name" class="form-control" placeholder="Camera Lobby" required>
                     </div>
                     <div class="form-group">
-                        <label for="stream-type">Tipe Stream</label>
+                        <label for="stream-type">Stream Type</label>
                         <select id="stream-type" class="form-control">
-                            <option value="hls">HLS (HTTP Live Streaming)</option>
-                            <option value="webrtc">WebRTC (Low Latency)</option>
                             <option value="rtsp">RTSP</option>
                             <option value="rtmp">RTMP</option>
+                            <option value="hls">HLS</option>
+                            <option value="webrtc">WebRTC</option>
                         </select>
-                        <small style="color: var(--gray); font-size: 12px; display: block; margin-top: 5px;">
-                            <i class="fas fa-info-circle"></i> WebRTC memberikan latency terendah (~100ms)
+                        <small class="form-hint">
+                            <i class="fas fa-info-circle"></i> WebRTC is lowest latency when the source supports it.
                         </small>
                     </div>
                     <div class="form-group">
-                        <label for="stream-url">URL Stream</label>
+                        <label for="stream-url">Stream URL</label>
                         <input type="text" id="stream-url" class="form-control" 
-                               placeholder="http://localhost:8888/camera1/index.m3u8" required>
-                        <small style="color: var(--gray); font-size: 12px; display: block; margin-top: 5px;">
-                            Contoh:<br>
+                               placeholder="rtsp://localhost:8554/camera1" required>
+                        <small class="form-hint form-hint-multiline">
+                            Examples:<br>
                             - HLS: http://localhost:8888/stream/index.m3u8<br>
-                            - WebRTC: http://localhost:8889/stream (tanpa /whep)<br>
+                            - WebRTC: http://localhost:8889/stream<br>
                             - RTSP: rtsp://localhost:8554/stream<br>
                             - RTMP: rtmp://localhost:1935/stream
                         </small>
                     </div>
                     <div class="form-actions">
-                        <button type="button" class="btn btn-secondary" onclick="closeAllModals()">Batal</button>
+                        <button type="button" class="btn btn-secondary" onclick="closeAllModals()">Cancel</button>
                         <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-plus"></i> Tambah Stream
+                            <i class="fas fa-plus"></i> Add Stream
                         </button>
                     </div>
                 </form>

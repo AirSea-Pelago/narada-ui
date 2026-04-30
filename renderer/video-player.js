@@ -75,8 +75,12 @@ class VideoStreamPlayer {
           <canvas class="manual-count-canvas" title="Left click to add, right click or Shift+click to remove"></canvas>
           <div class="video-ai-stats-overlay">
             <div class="video-ai-stat">
-              <span>Count</span>
+              <span class="stat-ai-count-label">Current</span>
               <strong class="stat-ai-count">0</strong>
+            </div>
+            <div class="video-ai-stat">
+              <span>Street Total</span>
+              <strong class="stat-ai-total">0</strong>
             </div>
             <div class="video-ai-stat">
               <span>FPS</span>
@@ -91,6 +95,82 @@ class VideoStreamPlayer {
               <strong class="stat-ai-zone">Off</strong>
             </div>
           </div>
+
+          <aside class="video-settings-panel" aria-hidden="true">
+            <div class="video-settings-panel-header">
+              <span>Stream Controls</span>
+              <button class="panel-close-btn" title="Close controls">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+            <div class="video-settings-panel-body">
+              <section class="panel-section">
+                <span class="panel-section-title">Controls</span>
+                <button class="panel-control-btn cc-panel-start-stop-btn" title="Start crowd counter">
+                  <i class="fas fa-play"></i>
+                  <span>Start Counter</span>
+                </button>
+                <button class="panel-control-btn cc-panel-zone-btn" title="Edit counting zone">
+                  <i class="fas fa-vector-square"></i>
+                  <span>Edit Zone</span>
+                </button>
+                <button class="panel-control-btn cc-panel-manual-btn" title="Manual count dots">
+                  <i class="fas fa-location-dot"></i>
+                  <span>Manual Count</span>
+                </button>
+              </section>
+
+              <section class="panel-section">
+                <span class="panel-section-title">Counting</span>
+                <label class="panel-field">
+                  <span>Preset</span>
+                  <select class="panel-preset-select"></select>
+                </label>
+                <label class="panel-field">
+                  <span>Confidence <strong class="panel-threshold-value">0.39</strong></span>
+                  <input type="range" class="panel-threshold-range" min="0.1" max="0.9" step="0.01" value="0.39">
+                </label>
+                <label class="panel-field">
+                  <span>Scale <strong class="panel-scale-value">0.70</strong></span>
+                  <input type="range" class="panel-scale-range" min="0.2" max="3.0" step="0.05" value="0.70">
+                </label>
+                <button class="panel-control-btn cc-panel-sweep-btn" title="Toggle sweep mode">
+                  <i class="fas fa-arrows-rotate"></i>
+                  <span>Enable Sweep</span>
+                </button>
+                <button class="panel-control-btn cc-panel-apply-btn" title="Apply counting settings">
+                  <i class="fas fa-check"></i>
+                  <span>Apply Changes</span>
+                </button>
+              </section>
+
+              <section class="panel-section">
+                <span class="panel-section-title">Stream</span>
+                <button class="panel-control-btn cc-panel-snapshot-btn" title="Take snapshot">
+                  <i class="fas fa-camera"></i>
+                  <span>Snapshot</span>
+                </button>
+                <button class="panel-control-btn cc-panel-record-btn" title="Start recording">
+                  <i class="fas fa-circle"></i>
+                  <span>Record</span>
+                </button>
+                <button class="panel-control-btn cc-panel-refresh-btn" title="Refresh stream">
+                  <i class="fas fa-sync-alt"></i>
+                  <span>Refresh</span>
+                </button>
+              </section>
+            </div>
+            <div class="video-settings-panel-meta">
+              <div>
+                <span>Resolution</span>
+                <strong class="panel-resolution">N/A</strong>
+              </div>
+              <div>
+                <span>State</span>
+                <strong class="panel-state">Offline</strong>
+              </div>
+            </div>
+          </aside>
           
           <div class="video-overlay">
             <button class="overlay-btn play-btn" title="Play/Pause">
@@ -146,8 +226,16 @@ class VideoStreamPlayer {
         
         <div class="video-stats">
           <div class="stat-item stat-ai">
-            <span class="stat-label">AI Count:</span>
+            <span class="stat-label stat-ai-count-label-strip">Current:</span>
             <span class="stat-value stat-ai-count-strip">0</span>
+          </div>
+          <div class="stat-item stat-ai">
+            <span class="stat-label">Street Total:</span>
+            <span class="stat-value stat-ai-total-strip">0</span>
+          </div>
+          <div class="stat-item stat-ai">
+            <span class="stat-label">Manual:</span>
+            <span class="stat-value stat-manual-count-strip">0</span>
           </div>
           <div class="stat-item stat-ai">
             <span class="stat-label">AI FPS:</span>
@@ -176,6 +264,32 @@ class VideoStreamPlayer {
           <div class="stat-item">
             <span class="stat-label">Buffer:</span>
             <span class="stat-value stat-buffer">0s</span>
+          </div>
+          <div class="stat-item stat-control">
+            <span class="stat-label">Counter:</span>
+            <button class="stat-counter-btn cc-start-stop-btn" title="Start crowd counter">
+              <i class="fas fa-play"></i>
+              <span>Start</span>
+            </button>
+          </div>
+          <div class="stat-item stat-control">
+            <span class="stat-label">Manual:</span>
+            <div class="stat-btn-group">
+              <button class="stat-counter-btn cc-strip-manual-btn" title="Manual count dots">
+                <i class="fas fa-location-dot"></i>
+                <span>Dots</span>
+              </button>
+              <button class="stat-icon-btn cc-strip-manual-reset-btn" title="Clear manual dots">
+                <i class="fas fa-rotate-left"></i>
+              </button>
+            </div>
+          </div>
+          <div class="stat-item stat-control">
+            <span class="stat-label">Sweep:</span>
+            <button class="stat-counter-btn cc-strip-sweep-reset-btn" title="Reset street total">
+              <i class="fas fa-rotate-left"></i>
+              <span>Reset</span>
+            </button>
           </div>
         </div>
         
@@ -216,9 +330,25 @@ class VideoStreamPlayer {
     this.statusIndicator = this.container.querySelector(".status-indicator");
     this.statusText = this.container.querySelector(".status-text");
     this.aiCountValues = this.container.querySelectorAll(".stat-ai-count, .stat-ai-count-strip");
+    this.aiTotalValues = this.container.querySelectorAll(".stat-ai-total, .stat-ai-total-strip");
+    this.aiCountLabels = this.container.querySelectorAll(".stat-ai-count-label, .stat-ai-count-label-strip");
+    this.manualCountValues = this.container.querySelectorAll(".stat-manual-count-strip");
     this.aiFpsValues = this.container.querySelectorAll(".stat-ai-fps, .stat-ai-fps-strip");
     this.aiModeValues = this.container.querySelectorAll(".stat-ai-mode, .stat-ai-mode-strip");
     this.aiZoneValues = this.container.querySelectorAll(".stat-ai-zone, .stat-ai-zone-strip");
+    this.settingsPanel = this.container.querySelector(".video-settings-panel");
+    this.startStopBtn = this.container.querySelector(".cc-start-stop-btn");
+    this.panelStartStopBtn = this.container.querySelector(".cc-panel-start-stop-btn");
+    this.panelZoneBtn = this.container.querySelector(".cc-panel-zone-btn");
+    this.panelManualBtn = this.container.querySelector(".cc-panel-manual-btn");
+    this.panelPresetSelect = this.container.querySelector(".panel-preset-select");
+    this.panelThresholdRange = this.container.querySelector(".panel-threshold-range");
+    this.panelScaleRange = this.container.querySelector(".panel-scale-range");
+    this.panelSweepBtn = this.container.querySelector(".cc-panel-sweep-btn");
+    this.panelApplyBtn = this.container.querySelector(".cc-panel-apply-btn");
+    this.stripManualBtn = this.container.querySelector(".cc-strip-manual-btn");
+    this.stripManualResetBtn = this.container.querySelector(".cc-strip-manual-reset-btn");
+    this.stripSweepResetBtn = this.container.querySelector(".cc-strip-sweep-reset-btn");
     // Next/Previous Stream buttons
     const nextStreamBtn = this.container.querySelector(".next-stream-btn");
     const prevStreamBtn = this.container.querySelector(".prev-stream-btn");
@@ -286,20 +416,25 @@ class VideoStreamPlayer {
       manualCountBtn.addEventListener("click", () => this.toggleManualMode());
     }
 
-    const zoneEditBtn = this.container.querySelector(".zone-edit-btn");
-    if (zoneEditBtn) {
-      zoneEditBtn.addEventListener("click", () => {
-        if (this.streamManager) {
-          const enableZone = !this.streamManager.zoneEditing;
-          if (window.crowdCounter && window.crowdCounter.setZoneEnabled) {
-            window.crowdCounter.setZoneEnabled(enableZone, { markDirty: true });
-            if (window.crowdCounter.applyZoneSettingsNow) {
-              window.crowdCounter.applyZoneSettingsNow(enableZone ? "Enabling counting zone..." : "Disabling counting zone...");
-            }
-          }
-          this.streamManager.setZoneEditing(enableZone, { skipApply: true });
+    if (this.stripManualBtn) {
+      this.stripManualBtn.addEventListener("click", () => this.toggleManualMode());
+    }
+
+    if (this.stripManualResetBtn) {
+      this.stripManualResetBtn.addEventListener("click", () => this.clearManualCorrections());
+    }
+
+    if (this.stripSweepResetBtn) {
+      this.stripSweepResetBtn.addEventListener("click", () => {
+        if (window.crowdCounter && window.crowdCounter.resetSweepCounter) {
+          window.crowdCounter.resetSweepCounter();
         }
       });
+    }
+
+    const zoneEditBtn = this.container.querySelector(".zone-edit-btn");
+    if (zoneEditBtn) {
+      zoneEditBtn.addEventListener("click", () => this.toggleZoneEditing());
     }
 
     if (this.zoneOverlay) {
@@ -325,7 +460,82 @@ class VideoStreamPlayer {
 
     const settingsBtn = this.container.querySelector(".settings-btn");
     if (settingsBtn) {
-      settingsBtn.addEventListener("click", () => this.showSettings());
+      settingsBtn.addEventListener("click", () => this.toggleSettingsPanel());
+    }
+
+    const panelCloseBtn = this.container.querySelector(".panel-close-btn");
+    if (panelCloseBtn) {
+      panelCloseBtn.addEventListener("click", () => this.toggleSettingsPanel(false));
+    }
+
+    [this.startStopBtn, this.panelStartStopBtn].forEach((button) => {
+      if (!button) return;
+      button.addEventListener("click", () => this.toggleCrowdCounter());
+    });
+
+    if (this.panelZoneBtn) {
+      this.panelZoneBtn.addEventListener("click", () => this.toggleZoneEditing());
+    }
+
+    if (this.panelManualBtn) {
+      this.panelManualBtn.addEventListener("click", () => this.toggleManualMode());
+    }
+
+    if (this.panelPresetSelect) {
+      this.panelPresetSelect.addEventListener("change", () => {
+        if (window.crowdCounter && window.crowdCounter.selectPreset) {
+          window.crowdCounter.selectPreset(this.panelPresetSelect.value);
+          this.syncCounterControls();
+        }
+      });
+    }
+
+    if (this.panelThresholdRange) {
+      this.panelThresholdRange.addEventListener("input", () => {
+        if (window.crowdCounter && window.crowdCounter.setBasicSetting) {
+          window.crowdCounter.setBasicSetting("threshold", this.panelThresholdRange.value);
+          this.syncCounterControls();
+        }
+      });
+    }
+
+    if (this.panelScaleRange) {
+      this.panelScaleRange.addEventListener("input", () => {
+        if (window.crowdCounter && window.crowdCounter.setBasicSetting) {
+          window.crowdCounter.setBasicSetting("scale", this.panelScaleRange.value);
+          this.syncCounterControls();
+        }
+      });
+    }
+
+    if (this.panelSweepBtn) {
+      this.panelSweepBtn.addEventListener("click", () => {
+        this.toggleStreetSweep();
+      });
+    }
+
+    if (this.panelApplyBtn) {
+      this.panelApplyBtn.addEventListener("click", () => {
+        if (window.crowdCounter && window.crowdCounter.apply) {
+          window.crowdCounter.apply();
+          this.syncCounterControls();
+        }
+      });
+    }
+
+    const panelSnapshotBtn = this.container.querySelector(".cc-panel-snapshot-btn");
+    if (panelSnapshotBtn) {
+      panelSnapshotBtn.addEventListener("click", () => this.takeSnapshot());
+    }
+
+    const panelRecordBtn = this.container.querySelector(".cc-panel-record-btn");
+    if (panelRecordBtn) {
+      panelRecordBtn.addEventListener("click", () => this.toggleRecording());
+    }
+
+    const panelRefreshBtn = this.container.querySelector(".cc-panel-refresh-btn");
+    if (panelRefreshBtn) {
+      panelRefreshBtn.addEventListener("click", () => this.refreshStream());
     }
 
     const refreshBtn = this.container.querySelector(".refresh-btn");
@@ -373,20 +583,20 @@ class VideoStreamPlayer {
       });
 
       this.videoElement.addEventListener("loadeddata", () => {
-        this.hasVideoFrame = true;
+        this.setVideoFrameReady(true);
         this.updateStatus("connected");
         this.updateStats();
         this.updateInteractiveLayers();
       });
 
       this.videoElement.addEventListener("loadedmetadata", () => {
-        this.hasVideoFrame = true;
+        this.setVideoFrameReady(true);
         this.updateStats();
         this.updateInteractiveLayers();
       });
 
       this.videoElement.addEventListener("error", (e) => {
-        this.hasVideoFrame = false;
+        this.setVideoFrameReady(false);
         console.error("Video error:", e);
         this.updateStatus("error");
         this.showError("Failed to load video stream");
@@ -460,6 +670,150 @@ class VideoStreamPlayer {
     this.drawManualPoints();
   }
 
+  setVideoFrameReady(ready) {
+    this.hasVideoFrame = !!ready;
+    if (this.videoContainer) {
+      this.videoContainer.classList.toggle("has-video-frame", this.hasVideoFrame);
+    }
+    this.syncCounterControls();
+  }
+
+  toggleCrowdCounter() {
+    if (!window.crowdCounter) {
+      this.showNotification("Crowd counter is not available");
+      return;
+    }
+    const state = window.crowdCounter.getState ? window.crowdCounter.getState() : {};
+    if (state.running && window.crowdCounter.stop) {
+      window.crowdCounter.stop();
+    } else if (window.crowdCounter.start) {
+      window.crowdCounter.start();
+    }
+    this.syncCounterControls();
+  }
+
+  toggleZoneEditing() {
+    if (!this.streamManager) return;
+    const enableZone = !this.streamManager.zoneEditing;
+    if (window.crowdCounter && window.crowdCounter.setZoneEnabled) {
+      window.crowdCounter.setZoneEnabled(enableZone, { markDirty: true });
+      if (window.crowdCounter.applyZoneSettingsNow) {
+        window.crowdCounter.applyZoneSettingsNow(enableZone ? "Enabling counting zone..." : "Disabling counting zone...");
+      }
+    }
+    this.streamManager.setZoneEditing(enableZone, { skipApply: true });
+    this.syncCounterControls();
+  }
+
+  toggleStreetSweep() {
+    const settings = window.crowdCounter && window.crowdCounter.getSettings ? window.crowdCounter.getSettings() : {};
+    const enableSweep = !settings.sweep_mode;
+    if (!window.crowdCounter || !window.crowdCounter.setBasicSetting) return;
+
+    window.crowdCounter.setBasicSetting("sweep_mode", enableSweep);
+
+    if (enableSweep) {
+      if (window.crowdCounter.setZoneEnabled) {
+        window.crowdCounter.setZoneEnabled(true, { markDirty: true });
+      }
+      if (this.streamManager) {
+        this.streamManager.setZoneEditing(true, { skipApply: true });
+      }
+      this.toggleSettingsPanel(true);
+      this.showNotification("Street sweep enabled. Adjust the zone, then apply.");
+    } else {
+      this.showNotification("Street sweep disable pending apply");
+    }
+
+    this.syncCounterControls();
+  }
+
+  toggleSettingsPanel(forceOpen = null) {
+    if (!this.settingsPanel || !this.videoContainer) return;
+    const open = forceOpen === null ? !this.videoContainer.classList.contains("settings-panel-open") : !!forceOpen;
+    this.videoContainer.classList.toggle("settings-panel-open", open);
+    this.settingsPanel.setAttribute("aria-hidden", open ? "false" : "true");
+  }
+
+  syncCounterControls() {
+    const state = window.crowdCounter && window.crowdCounter.getState ? window.crowdCounter.getState() : {};
+    const settings = window.crowdCounter && window.crowdCounter.getSettings ? window.crowdCounter.getSettings() : {};
+    const running = !!state.running;
+
+    [this.startStopBtn, this.panelStartStopBtn].forEach((button) => {
+      if (!button) return;
+      const icon = button.querySelector("i");
+      const label = button.querySelector("span");
+      button.classList.toggle("running", running);
+      button.title = running ? "Stop crowd counter" : "Start crowd counter";
+      if (icon) icon.className = running ? "fas fa-stop" : "fas fa-play";
+      if (label) label.textContent = button === this.panelStartStopBtn
+        ? (running ? "Stop Counter" : "Start Counter")
+        : (running ? "Stop" : "Start");
+    });
+
+    if (this.panelZoneBtn) {
+      this.panelZoneBtn.classList.toggle("active", !!this.streamManager?.zoneEditing && !!settings.zone_enabled);
+    }
+    if (this.panelManualBtn) {
+      this.panelManualBtn.classList.toggle("active", this.manualMode);
+    }
+    if (this.stripManualBtn) {
+      this.stripManualBtn.classList.toggle("active", this.manualMode);
+    }
+    if (this.manualCountValues) {
+      this.manualCountValues.forEach((el) => { el.textContent = String(this.manualPoints.length); });
+    }
+    if (this.panelPresetSelect && window.crowdCounter?.getPresets) {
+      const presets = window.crowdCounter.getPresets();
+      const currentId = window.crowdCounter.getCurrentPresetId ? window.crowdCounter.getCurrentPresetId() : "";
+      if (this.panelPresetSelect.dataset.count !== String(presets.length)) {
+        this.panelPresetSelect.innerHTML = presets
+          .map((preset) => `<option value="${preset.id}">${preset.name}</option>`)
+          .join("");
+        this.panelPresetSelect.dataset.count = String(presets.length);
+      }
+      if (currentId) this.panelPresetSelect.value = currentId;
+    }
+    if (this.panelThresholdRange && settings.threshold !== undefined) {
+      this.panelThresholdRange.value = settings.threshold;
+      const value = this.container.querySelector(".panel-threshold-value");
+      if (value) value.textContent = Number(settings.threshold).toFixed(2);
+    }
+    if (this.panelScaleRange && settings.scale !== undefined) {
+      this.panelScaleRange.value = settings.scale;
+      const value = this.container.querySelector(".panel-scale-value");
+      if (value) value.textContent = Number(settings.scale).toFixed(2);
+    }
+    if (this.panelSweepBtn) {
+      const sweepEnabled = !!settings.sweep_mode;
+      const icon = this.panelSweepBtn.querySelector("i");
+      const label = this.panelSweepBtn.querySelector("span");
+      this.panelSweepBtn.classList.toggle("active", sweepEnabled);
+      if (icon) icon.className = sweepEnabled ? "fas fa-arrows-rotate" : "fas fa-arrows-rotate";
+      if (label) label.textContent = sweepEnabled ? "Disable Street Sweep" : "Enable Street Sweep";
+    }
+    if (this.stripSweepResetBtn) {
+      this.stripSweepResetBtn.disabled = !running || !settings.sweep_mode;
+    }
+    if (this.panelApplyBtn) {
+      const dirty = !!state.dirty;
+      this.panelApplyBtn.classList.toggle("active", dirty);
+      this.panelApplyBtn.disabled = !dirty;
+    }
+
+    const panelResolution = this.container.querySelector(".panel-resolution");
+    if (panelResolution) {
+      panelResolution.textContent = this.videoElement && this.videoElement.videoWidth
+        ? `${this.videoElement.videoWidth}x${this.videoElement.videoHeight}`
+        : "N/A";
+    }
+    const panelState = this.container.querySelector(".panel-state");
+    if (panelState) {
+      panelState.textContent = this.statusText ? this.statusText.textContent : "Offline";
+    }
+  }
+
   updateZoneOverlay() {
     if (!this.zoneOverlay || !this.streamManager) return;
 
@@ -488,6 +842,7 @@ class VideoStreamPlayer {
       btn.classList.toggle("active", enabled);
     }
 
+    this.syncCounterControls();
     this.updateCrowdStatsOverlay();
   }
 
@@ -495,17 +850,27 @@ class VideoStreamPlayer {
     const state = window.crowdCounter && window.crowdCounter.getState ? window.crowdCounter.getState() : null;
     const settings = window.crowdCounter && window.crowdCounter.getSettings ? window.crowdCounter.getSettings() : {};
     const count = stats && stats.count !== undefined ? stats.count : state ? state.count : 0;
+    const total = stats && stats.total !== undefined ? stats.total : state ? state.sweepTotal + state.manualCorrection : count;
     const fps = stats && stats.fps !== undefined ? Number(stats.fps) : state ? Number(state.fps) : 0;
     const mode = stats && stats.mode ? stats.mode : state ? state.mode : "DET";
     const zoneEnabled = !!settings.zone_enabled;
+    const sweepEnabled = mode === "SWEEP" || !!settings.sweep_mode;
 
     this.aiCountValues.forEach((el) => { el.textContent = String(Number.isFinite(Number(count)) ? count : 0); });
+    if (this.aiTotalValues) this.aiTotalValues.forEach((el) => { el.textContent = String(Number.isFinite(Number(total)) ? total : 0); });
+    if (this.aiCountLabels) {
+      this.aiCountLabels.forEach((el) => {
+        const suffix = el.classList.contains("stat-ai-count-label-strip") ? ":" : "";
+        el.textContent = (sweepEnabled ? "Current In Zone" : "Current") + suffix;
+      });
+    }
     this.aiFpsValues.forEach((el) => { el.textContent = Number.isFinite(fps) ? fps.toFixed(1) : "0.0"; });
     this.aiModeValues.forEach((el) => { el.textContent = mode || "DET"; });
     this.aiZoneValues.forEach((el) => {
       el.textContent = zoneEnabled ? "On" : "Off";
       el.classList.toggle("active", zoneEnabled);
     });
+    this.syncCounterControls();
   }
 
   startZoneDrag(event) {
@@ -576,6 +941,7 @@ class VideoStreamPlayer {
     }
     this.drawManualPoints();
     this.showNotification(this.manualMode ? "Manual dot mode enabled" : "Manual dot mode disabled");
+    this.syncCounterControls();
   }
 
   handleManualCanvasClick(event, forceRemove) {
@@ -769,6 +1135,7 @@ class VideoStreamPlayer {
       this.videoElement.srcObject = null;
       this.videoElement.load();
     }
+    this.setVideoFrameReady(false);
     this.manualPoints = [];
   }
 
@@ -1155,18 +1522,7 @@ class VideoStreamPlayer {
   }
 
   showSettings() {
-    const settings = `
-Stream Settings:
-- Name: ${this.streamConfig.displayName || this.streamConfig.name}
-- Type: ${this.streamConfig.type.toUpperCase()}
-- URL: ${this.streamConfig.url}
-- Resolution: ${this.videoElement?.videoWidth || 0}x${
-      this.videoElement?.videoHeight || 0
-    }
-- State: ${this.isPlaying ? "Playing" : "Paused"}
-    `.trim();
-
-    alert(settings);
+    this.toggleSettingsPanel(true);
   }
 
   refreshStream() {
@@ -1182,6 +1538,7 @@ Stream Settings:
       this.statusIndicator.className = `status-indicator ${status}`;
       this.statusText.textContent = this.formatStatusText(status);
     }
+    this.syncCounterControls();
   }
 
   formatStatusText(status) {
@@ -1280,9 +1637,11 @@ Stream Settings:
         bufferEl.textContent = `${buffered.toFixed(1)}s`;
       }
     }
+    this.syncCounterControls();
   }
 
   showLoading() {
+    this.setVideoFrameReady(false);
     if (this.loadingSpinner) {
       this.loadingSpinner.style.display = "flex";
     }
@@ -1630,6 +1989,7 @@ class StreamManager {
     this.players.forEach((player) => {
       if (player.updateZoneOverlay) {
         player.updateZoneOverlay();
+        window.requestAnimationFrame(() => player.updateZoneOverlay());
       }
     });
   }

@@ -230,6 +230,13 @@ function setupEventListeners() {
       showAddStreamModal();
     });
   }
+
+  const dashboardAddStream = document.getElementById("dashboard-add-stream");
+  if (dashboardAddStream) {
+    dashboardAddStream.addEventListener("click", () => {
+      window.showAddStreamModal();
+    });
+  }
 }
 
 // Setup UI
@@ -478,9 +485,11 @@ window.showAddStreamModal = function () {
 
       const submitBtn = form.querySelector('button[type="submit"]');
       if (submitBtn) {
-        submitBtn.innerHTML = '<i class="fas fa-plus"></i> Tambah Stream';
+        submitBtn.innerHTML = '<i class="fas fa-plus"></i> Add Stream';
       }
     }
+    const modalTitle = document.getElementById("stream-modal-title");
+    if (modalTitle) modalTitle.textContent = "Add Stream";
   }
 };
 
@@ -509,6 +518,8 @@ window.showEditStreamModal = function (stream) {
       submitBtn.innerHTML = '<i class="fas fa-save"></i> Update Stream';
     }
   }
+  const modalTitle = document.getElementById("stream-modal-title");
+  if (modalTitle) modalTitle.textContent = "Edit Stream";
 };
 
 // Handle add/edit stream
