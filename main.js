@@ -560,6 +560,37 @@ function getBuiltInPresets() {
   ];
 }
 
+function getMediaMTXConfiguredPaths() {
+  try {
+    const { mediamtxDir } = getMediaMTXPath();
+    const configPath = path.join(mediamtxDir, "mediamtx.yml");
+    if (!fs.existsSync(configPath)) return [];
+
+    const lines = fs.readFileSync(configPath, "utf8").split(/\r?\n/);
+    const paths = [];
+    let inPaths = false;
+
+    for (const line of lines) {
+      if (/^paths:\s*$/.test(line)) {
+        inPaths = true;
+        continue;
+      }
+      if (!inPaths) continue;
+      if (/^\S/.test(line) && line.trim() !== "") break;
+
+      const match = line.match(/^ {2}([A-Za-z0-9_-]+):\s*(?:#.*)?$/);
+      if (match && match[1] !== "all") {
+        paths.push(match[1]);
+      }
+    }
+
+    return paths;
+  } catch (error) {
+    console.error("[Main] Failed to read MediaMTX paths:", error);
+    return [];
+  }
+}
+
 function loadPresetsData() {
   const filePath = getPresetsFilePath();
 
@@ -1426,6 +1457,13 @@ ipcMain.handle("load-stream-config", async () => {
     console.error("[Main] Error loading stream config:", error);
     return { success: false, error: error. message };
   }
+});
+
+ipcMain.handle("get-mediamtx-paths", async () => {
+  return {
+    success: true,
+    paths: getMediaMTXConfiguredPaths(),
+  };
 });
 
 // =============================================================================

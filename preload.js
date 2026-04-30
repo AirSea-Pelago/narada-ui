@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveStreamConfig: (config) =>
     ipcRenderer.invoke("save-stream-config", config),
   loadStreamConfig: () => ipcRenderer.invoke("load-stream-config"),
+  getMediaMTXPaths: () => ipcRenderer.invoke("get-mediamtx-paths"),
 
   // System info
   getSystemInfo: () => ipcRenderer.invoke("get-system-info"),

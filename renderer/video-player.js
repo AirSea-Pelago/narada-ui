@@ -1784,9 +1784,10 @@ class StreamManager {
   }
 
   async initialize() {
+    const mediamtxPaths = await this.loadMediaMTXPaths();
     const result = await window.electronAPI.loadStreamConfig();
     if (result.success && result.config) {
-      this.streams = result.config;
+      this.streams = this.reconcileStreamsWithMediaMTX(result.config, mediamtxPaths);
 
       // Normalize saved stream names to match URL paths for non-WebRTC streams.
       let hasMigration = false;
@@ -1815,34 +1816,81 @@ class StreamManager {
     }
 
     if (this.streams.length === 0) {
-      this.streams = this.getDefaultStreams();
+      this.streams = this.getDefaultStreams(mediamtxPaths);
       await this.saveConfig();
     }
 
     return this.streams;
   }
 
-  getDefaultStreams() {
-    return [
-      {
-        id: "1",
-        name: "cognitiveOutput",
-        displayName: "AI Crowd Count",
-        type: "rtsp",
-        url: "rtsp://localhost:8554/cognitiveOutput",
-        enabled: true,
-        position: 1,
-      },
-      {
-        id: "2",
-        name: "matrice4t",
-        displayName: "Matrice 4T",
-        type: "rtsp",
-        url: "rtsp://localhost:8554/matrice4t",
-        enabled: true,
-        position: 2,
-      },
+  async loadMediaMTXPaths() {
+    if (!window.electronAPI?.getMediaMTXPaths) return [];
+    try {
+      const result = await window.electronAPI.getMediaMTXPaths();
+      return result && result.success && Array.isArray(result.paths) ? result.paths : [];
+    } catch (error) {
+      console.warn("[StreamManager] Failed to load MediaMTX paths:", error);
+      return [];
+    }
+  }
+
+  getDefaultStreams(paths = []) {
+    const configuredPaths = paths.length ? paths : ["cognitiveOutput", "matrice4t"];
+    const preferred = ["cognitiveOutput", "matrice4t"];
+    const orderedPaths = [
+      ...preferred.filter((path) => configuredPaths.includes(path)),
+      ...configuredPaths.filter((path) => !preferred.includes(path)),
     ];
+
+    return orderedPaths.slice(0, 4).map((path, index) => ({
+      id: String(index + 1),
+      name: path,
+      displayName: path === "cognitiveOutput" ? "AI Crowd Count" : path,
+      type: "rtsp",
+      url: `rtsp://localhost:8554/${path}`,
+      enabled: true,
+      position: index + 1,
+    }));
+  }
+
+  reconcileStreamsWithMediaMTX(streams, paths = []) {
+    if (!Array.isArray(streams)) return [];
+    if (!paths.length) return streams;
+
+    const configured = this.getDefaultStreams(paths);
+    const stalePathNames = new Set(["live", "stream"]);
+    let changed = false;
+
+    const migrated = streams.map((stream, index) => {
+      if (!stream || !stream.url) return stream;
+      let pathName = "";
+      try {
+        pathName = new URL(stream.url).pathname.replace(/^\/+|\/+$/g, "");
+      } catch (error) {
+        return stream;
+      }
+
+      if (!stalePathNames.has(pathName) && paths.includes(pathName)) {
+        return stream;
+      }
+
+      const replacement = configured[index] || configured.find((item) => item.name !== "cognitiveOutput") || configured[0];
+      if (!replacement) return stream;
+      changed = true;
+      return {
+        ...stream,
+        name: replacement.name,
+        displayName: stream.displayName && !stalePathNames.has(pathName) ? stream.displayName : replacement.displayName,
+        type: replacement.type,
+        url: replacement.url,
+      };
+    });
+
+    if (changed) {
+      setTimeout(() => this.saveConfig(), 0);
+    }
+
+    return migrated;
   }
 
   async addStream(streamConfig) {
